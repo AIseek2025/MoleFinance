@@ -37,6 +37,7 @@ pub mod context;
 pub mod multi;
 pub mod position_interest;
 pub mod prober;
+pub mod protocol_summary;
 pub mod report;
 pub mod rpc_fetcher;
 
@@ -62,6 +63,9 @@ pub use position_interest::{
 pub use prober::{
     CycleOutcome, MarketFetcher, OpenInterestAugmentingFetcher, ProberClock, ProberConfig,
     ProberLoop, ProberSink,
+};
+pub use protocol_summary::{
+    render_protocol_summary_json, summarize_protocol, ProtocolSummary,
 };
 pub use rpc_fetcher::{
     FetchedAccount, RpcAccountSource, RpcMarketFetcher, RpcMarketFetcherConfig,

@@ -13,6 +13,52 @@ and integrators, and where to look for the proof.
 
 ---
 
+## [Wave 28] — 2026-06-19 — pre-launch readiness review + protocol Overview landing page
+
+Acting on a pre-launch development-planning request, we audited every
+module against the PRD and roadmap (`Docs/Planning/25-上线前就绪评估.md`).
+Verdict: the **on-chain instruction surface is launch-complete**
+(init / sync / open / close / force-close / claim / pre-sync / harvest /
+pause-resume-freeze / global-pause / schema migration / keeper-leader
+lifecycle) — the remaining contract items are deploy-time actions (real
+program ID, IDL publish) and external audit, all out-of-sandbox. The real
+gap was a **protocol-level landing page**: every existing panel zooms into
+ONE market, with no at-a-glance protocol pulse.
+
+**Frontend — Overview landing page.**
+
+- `feed/protocolStats.ts` — `aggregateProtocolStats(feed)` folds the live
+  multi-market view into protocol headline numbers: total value locked
+  (Σ sub-pool collateral), open positions, long/short collateral + net
+  skew, recovery outstanding, and a per-market breakdown. Falls back to
+  the lone `indexer` snapshot in single-market mode so the page is always
+  meaningful. `longShareBps` drives the skew gauge. 8 vitest tests.
+- `panels/OverviewPanel.tsx` — five KPI cards + a long/short skew bar +
+  a per-market table (state pill, collateral, long/short, positions,
+  recovery). Wired as a new `overview` tab, placed first and made the
+  **default** landing tab.
+
+**Backend — protocol rollup (mirror).**
+
+- `ops_toolkit::protocol_summary` — `summarize_protocol(&MultiMarketHealthReport)`
+  folds N per-market health reports into one `ProtocolSummary`
+  (markets, healthy/warn/critical counts, total firing checks, worst exit
+  code, overall status, highest firing severity) + a flat-JSON renderer
+  for status pages / alert annotations. The backend twin of the frontend
+  `protocolStats` aggregation. 4 unit tests.
+
+**Verification.** `cargo test` 464/464 (wave-27 460 → +4) · clippy clean
+(default + `solana-rpc`) · frontend vitest 152/152 (wave-27 144 → +8) ·
+typecheck + build clean · all three governance verifiers green
+(test-counts 464/464, schema-parity 103/103, security-references 32/32).
+
+No contract changes (surface already launch-complete). `Docs/Planning/25`
+records the full readiness matrix and the wave-29+ out-of-sandbox roadmap
+(deploy-time program ID/IDL, devnet matrix, real wallet adapter, closed
+PnL history, external audit).
+
+---
+
 ## [Wave 27] — 2026-06-19 — live reported notional from the Market PDA
 
 Wave 26 made the prober's *on-chain* side live (the open-interest

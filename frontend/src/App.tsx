@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { JSX } from "react";
 
+import { OverviewPanel } from "./panels/OverviewPanel";
 import { TraderPanel } from "./panels/TraderPanel";
 import { IndexerPanel } from "./panels/IndexerPanel";
 import { KeeperPanel } from "./panels/KeeperPanel";
@@ -31,9 +32,14 @@ import { useProberSnapshot } from "./useProberSnapshot";
 import type { WalletAdapter, WalletStatus } from "./wallet";
 import { formatPubkey, formatSlot } from "./format";
 
-type PanelId = "trader" | "indexer" | "keeper";
+type PanelId = "overview" | "trader" | "indexer" | "keeper";
 
 const TABS: { id: PanelId; label: string; description: string }[] = [
+  {
+    id: "overview",
+    label: "Overview",
+    description: "Protocol TVL, open interest, per-market health",
+  },
   {
     id: "trader",
     label: "Trader",
@@ -132,7 +138,7 @@ function buildAdapter(): AdapterBuild {
 }
 
 export function App(): JSX.Element {
-  const [active, setActive] = useState<PanelId>("trader");
+  const [active, setActive] = useState<PanelId>("overview");
   const built = useMemo(() => buildAdapter(), []);
   const adapter = built.adapter;
   const expectedLeaders = built.expectedLeaders;
@@ -230,6 +236,9 @@ export function App(): JSX.Element {
 
   let panel: JSX.Element;
   switch (active) {
+    case "overview":
+      panel = <OverviewPanel feed={feed} />;
+      break;
     case "trader":
       panel = <TraderPanel feed={feed} wallet={wallet} />;
       break;

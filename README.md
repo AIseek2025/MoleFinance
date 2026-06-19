@@ -34,9 +34,9 @@ We isolate all three into pure-Rust crates that run on the host. They are exhaus
 
 ## Status
 
-**Wave 27 — live reported notional lifted from the `Market` PDA (`RpcMarketFetcher` reads `current_total_notional`) so the drift check reconciles two independent on-chain truths + frontend program-aggregate reconciliation row.**
+**Wave 28 — pre-launch readiness review (`Docs/Planning/25`): contract surface is launch-complete; the gap was a protocol-level landing page. Shipped a protocol Overview page (TVL / open interest / long-short skew / per-market health) backed by the frontend `protocolStats` aggregation, mirrored by the backend `ops_toolkit::protocol_summary` rollup.**
 
-**460 Rust tests host-only · 144 frontend vitest tests · 33 ops-toolkit/ts vitest tests · 0 failures · clippy clean (`-D warnings`, default + `solana-rpc` features) · `npm run typecheck` clean (strict + `exactOptionalPropertyTypes` + `noUncheckedIndexedAccess` + `verbatimModuleSyntax`) · `npm run build` clean (539 KB JS / 159 KB gzip).**
+**464 Rust tests host-only · 152 frontend vitest tests · 0 failures · clippy clean (`-D warnings`, default + `solana-rpc` features) · `npm run typecheck` clean (strict + `exactOptionalPropertyTypes` + `noUncheckedIndexedAccess` + `verbatimModuleSyntax`) · `npm run build` clean.**
 
 Wave 21 closes the four production-readiness gaps wave 20 left at the trait boundary:
 

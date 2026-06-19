@@ -946,3 +946,100 @@ body {
 .market-pill-dot.dot-unowned { background: #f59e0b; }
 .market-pill-dot.dot-uninitialised { background: #6c7280; }
 .market-pill-dot.dot-unknown { background: #6c7280; }
+
+/* Wave 28 — protocol Overview landing page. */
+.overview {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.ov-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+.ov-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.ov-card-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.ov-card-value {
+  font-size: 24px;
+  font-weight: 600;
+  font-family: var(--mono);
+  color: var(--text);
+}
+.ov-card-sub {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.ov-skew-long, .ov-card-value.ov-skew-long { color: var(--long); }
+.ov-skew-short, .ov-card-value.ov-skew-short { color: var(--short); }
+.ov-card-value.ov-skew-neutral { color: var(--accent); }
+
+.ov-skew-bar {
+  display: flex;
+  height: 26px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-family: var(--mono);
+}
+.ov-skew-long, .ov-skew-bar > .ov-skew-long {
+  background: rgba(92, 205, 139, 0.28);
+  color: var(--long);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+.ov-skew-short, .ov-skew-bar > .ov-skew-short {
+  background: rgba(255, 122, 138, 0.28);
+  color: var(--short);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+.ov-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ov-table th, .ov-table td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.ov-table th {
+  color: var(--text-dim);
+  font-weight: 500;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+.ov-num { text-align: right; font-family: var(--mono); }
+.ov-table .ov-long { color: var(--long); }
+.ov-table .ov-short { color: var(--short); }
+.ov-sym { font-weight: 600; font-family: var(--mono); }
+.ov-pill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+.ov-pill-active { color: var(--good); border-color: rgba(93, 214, 194, 0.5); }
+.ov-pill-paused { color: var(--warn); border-color: rgba(255, 93, 109, 0.5); }
