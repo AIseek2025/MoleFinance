@@ -1,0 +1,51 @@
+[package]
+name = "ops-toolkit"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Wave 12 — operations toolkit. Automates the 18 health-check probes documented in Docs/Planning/24-operator-runbook.md §2; produces JSON + Prometheus textfile output and surfaces non-zero exit codes for AlertManager / Nagios integration."
+
+[features]
+default = []
+# Wave 21 — production binding for `RpcAccountSource`. Forwards to
+# `keeper-rpc/solana-rpc` (which transitively pulls in
+# `solana-client = 4.0`, the granular Anza-fork crates, and tokio).
+# Default builds (host-only / sandbox CI) stay tiny — the entire
+# Solana dep tree is pulled only when this feature is enabled.
+solana-rpc = [
+    "keeper-rpc/solana-rpc",
+    "dep:solana-client",
+    "dep:solana-commitment-config",
+]
+
+[dependencies]
+thiserror = { workspace = true }
+clearing-core = { path = "../clearing-core" }
+# Wave 18 — multi-market scan needs the shared MarketRegistry +
+# TOML loader. Default features keep the dependency tree small
+# (no solana-client; just keeper / keeper-decoder / tx-codec /
+# clearing-core / borsh / sha2 / thiserror — all already in
+# workspace).
+keeper-rpc = { path = "../keeper-rpc" }
+# Wave 20 — `RpcMarketFetcher` decodes on-chain `Market` and
+# `KeeperLeaderLock` PDAs via the host-side Borsh mirrors in
+# `keeper-decoder`. Zero-Solana-dep, host-buildable.
+keeper-decoder = { path = "../keeper-decoder" }
+# Wave 21 — optional Solana production binding. Versions chosen
+# to align with `keeper-rpc`'s `solana-rpc` feature so the build
+# graph deduplicates on a single solana-client version.
+solana-client = { version = "4.0", optional = true }
+solana-commitment-config = { version = "3.1", optional = true }
+
+[dev-dependencies]
+borsh = { version = "1.5", default-features = false, features = ["derive"] }
+
+[lib]
+name = "ops_toolkit"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ops-toolkit"
+path = "src/main.rs"

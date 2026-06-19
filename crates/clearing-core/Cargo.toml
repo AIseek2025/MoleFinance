@@ -1,0 +1,17 @@
+[package]
+name = "clearing-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "MoleOption O(1) directional-equity-pool shares clearing engine."
+
+[dependencies]
+molemath = { path = "../molemath" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }

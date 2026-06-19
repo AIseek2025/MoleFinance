@@ -1,0 +1,18 @@
+[package]
+name = "simulation"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Offline per-position proportional clearing oracle (whitepaper §3)."
+
+[dependencies]
+molemath = { path = "../molemath" }
+clearing-core = { path = "../clearing-core" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }

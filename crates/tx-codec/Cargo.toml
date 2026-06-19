@@ -1,0 +1,15 @@
+[package]
+name = "tx-codec"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Wave 15 — Anchor instruction encoder for the mole-option program. Same wasm32-buildable / zero-Solana-dep design as `keeper-decoder`: defines `PriceEnvelopeArgs` + `OpenParams`, the 8 Anchor instruction discriminators (3 keeper-side + 5 trader-side), and Borsh-encoded `encode_*_ix` helpers that downstream callers prepend program id + account metas to. Future wave 16 wraps with `wasm-bindgen` so the frontend imports the same encoder verbatim."
+
+[dependencies]
+borsh = { version = "1.5", default-features = false, features = ["derive"] }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+sha2 = "0.10"

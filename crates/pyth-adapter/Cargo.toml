@@ -1,0 +1,12 @@
+[package]
+name = "pyth-adapter"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Host-testable Pyth (Pythnet v2 layout) price account validator and PRICE_SCALE normalizer."
+
+[dependencies]
+molemath = { path = "../molemath" }
+thiserror = { workspace = true }

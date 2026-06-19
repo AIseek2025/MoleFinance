@@ -1,0 +1,19 @@
+[package]
+name = "indexer"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Off-chain replay of clearing-core EngineEvents into per-position locked_loss/realized_profit_balance projection."
+
+[dependencies]
+molemath = { path = "../molemath" }
+clearing-core = { path = "../clearing-core" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+simulation = { path = "../simulation" }
+proptest = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }

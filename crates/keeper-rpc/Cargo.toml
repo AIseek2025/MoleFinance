@@ -1,0 +1,63 @@
+[package]
+name = "keeper-rpc"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Wave 10 — Solana RPC adapter for the keeper crate. Default features are an abstract `AccountFetcher` / `TxBuilder` trait surface plus Borsh-decoded account mirrors (host-testable, no network); the `solana-rpc` feature wires them to `solana-client` for production."
+
+[features]
+default = []
+# Production binding to solana-client + the granular Anza-fork crates.
+# Optional so CI can run the host-only test surface without paying the
+# agave dependency tree on every build.
+#
+# We depend on the *granular* crates (solana-pubkey, solana-transaction,
+# solana-instruction, …) rather than the umbrella `solana-sdk` because
+# during the 4.0 transition `solana-sdk = 4.0.1` re-exports
+# `solana-transaction = 4.0.0`, while `solana-rpc-client = 4.0.0`
+# expects `solana-transaction = 3.1.0`. Pinning the granular crates to
+# the exact versions `solana-rpc-client 4.0` consumes avoids that
+# version-skew (`SerializableTransaction` impl mismatch).
+solana-rpc = [
+    "dep:solana-client",
+    "dep:solana-pubkey",
+    "dep:solana-transaction",
+    "dep:solana-instruction",
+    "dep:solana-commitment-config",
+    "dep:solana-keypair",
+    "dep:solana-signer",
+    "dep:solana-hash",
+    "dep:tokio",
+    "dep:base64",
+    "dep:serde_json",
+]
+
+[dependencies]
+keeper = { path = "../keeper" }
+keeper-decoder = { path = "../keeper-decoder" }
+tx-codec = { path = "../tx-codec" }
+clearing-core = { path = "../clearing-core" }
+borsh = { version = "1.5", features = ["derive"] }
+thiserror = { workspace = true }
+sha2 = "0.10"
+
+# Production binding. Pulled in only when `solana-rpc` is enabled so
+# the host-only build keeps a small dependency tree. Versions chosen
+# to match what `solana-client = 4.0` internally consumes.
+solana-client = { version = "4.0", optional = true }
+solana-pubkey = { version = "4.1", optional = true, default-features = false, features = ["std"] }
+solana-transaction = { version = "3.1", optional = true, features = ["bincode"] }
+solana-instruction = { version = "3.3", optional = true }
+solana-commitment-config = { version = "3.1", optional = true }
+solana-keypair = { version = "3.1", optional = true }
+solana-signer = { version = "3.0", optional = true }
+solana-hash = { version = "4.2", optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"], optional = true }
+base64 = { version = "0.22", optional = true }
+serde_json = { version = "1", optional = true }
+
+[dev-dependencies]
+chain-mirror = { path = "../chain-mirror" }
+molemath = { path = "../molemath" }

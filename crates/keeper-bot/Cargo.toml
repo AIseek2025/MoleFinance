@@ -1,0 +1,33 @@
+[package]
+name = "keeper-bot"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Wave 10 — runnable keeper daemon: ties Scheduler + RotateRiskPredictor + RealizedVolatilityEstimator + RpcExecutor into a polled main loop. Wave 12 added Prometheus metrics, /healthz, structured logging, graceful shutdown, and a production run-loop wrapper."
+
+[dependencies]
+keeper = { path = "../keeper" }
+keeper-rpc = { path = "../keeper-rpc" }
+keeper-decoder = { path = "../keeper-decoder" }
+clearing-core = { path = "../clearing-core" }
+thiserror = { workspace = true }
+# Wave 12 production wrappers. Kept minimal: no tokio, no hyper —
+# the metrics endpoint is a single-thread blocking listener and the
+# tick loop is a plain `std::thread::sleep` cadence.
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+ctrlc = { version = "3.4", default-features = false }
+
+[dev-dependencies]
+chain-mirror = { path = "../chain-mirror" }
+molemath = { path = "../molemath" }
+
+[[bin]]
+name = "keeper-bot"
+path = "src/main.rs"
+
+[lib]
+name = "keeper_bot"
+path = "src/lib.rs"

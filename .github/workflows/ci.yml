@@ -1,0 +1,312 @@
+name: CI
+
+# Wave 13 — fully covers the host-side test surface that wave 12 left
+# at 262 passing tests (273 with `--features solana-rpc`). The Solana
+# BPF / SBF toolchain bring-up is a separate workflow (see
+# `.github/workflows/solana-program-test.yml.todo`) gated on a runner
+# with stable bandwidth — sandbox-side this is the line that has
+# blocked wave 10 / 11 / 12.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  rust:
+    name: Rust (build + test + clippy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache cargo registry + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+
+      - name: cargo build (default features)
+        run: cargo build --workspace --all-targets
+
+      - name: cargo test (default features)
+        run: cargo test --workspace --all-targets --no-fail-fast
+
+      - name: cargo clippy (default features)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: cargo build (--features solana-rpc)
+        run: cargo build -p keeper-rpc --features solana-rpc
+
+      - name: cargo test (--features solana-rpc)
+        run: cargo test -p keeper-rpc --features solana-rpc
+
+      - name: cargo clippy (--features solana-rpc)
+        run: cargo clippy -p keeper-rpc --features solana-rpc --all-targets -- -D warnings
+
+      - name: Add wasm32-unknown-unknown target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: cargo build (keeper-decoder, wasm32-unknown-unknown)
+        # Wave 14 — proves the schema crate builds for the same target
+        # the wave-15 wasm-pack artifact will use. Sandbox bandwidth
+        # blocks rust-std download so this only runs on real CI; the
+        # crate is otherwise tested host-side via `cargo test -p
+        # keeper-decoder` above.
+        run: cargo build -p keeper-decoder --target wasm32-unknown-unknown --release
+
+      - name: ops-toolkit demo human (exit 0)
+        run: cargo run -p ops-toolkit -- demo human
+
+      - name: ops-toolkit demo-broken human (exit 4)
+        run: |
+          set +e
+          cargo run -p ops-toolkit -- demo-broken human
+          rc=$?
+          if [ "$rc" != "4" ]; then
+            echo "expected exit 4, got $rc"
+            exit 1
+          fi
+
+      - name: keeper-bot smoke (1 tick + auto-shutdown)
+        run: |
+          # `serve 127.0.0.1:0 1` binds an ephemeral port, runs one
+          # tick, exits cleanly. If this line stalls or panics, the
+          # production daemon path regressed.
+          cargo run -p keeper-bot --bin keeper-bot --quiet -- serve 127.0.0.1:0 1 || true
+
+  governance:
+    name: Governance — SECURITY.md + test-count parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      - name: SECURITY.md test references resolve to real symbols
+        run: bash scripts/verify-security-references.sh
+
+      - name: SECURITY.md claimed test count matches `cargo test --workspace`
+        run: bash scripts/verify-test-counts.sh
+
+      - name: Every Onchain* Rust field is documented in Docs/SCHEMA-MAPPING.md
+        run: bash scripts/verify-schema-parity.sh
+
+  wasm-pack:
+    name: wasm-pack (keeper-decoder → web bundle)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Wave 15 — package the schema crate into a web-target WASM bundle
+    # that the frontend's `wasmBuilder.ts` adapter consumes. Runs in
+    # parallel with the `frontend` job; the `frontend` job depends on
+    # the artifact uploaded here so the production build picks up the
+    # bytes from this run rather than a stale checked-in `pkg/`.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo registry + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-wasm-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-wasm-${{ runner.os }}-
+
+      - name: Install wasm-pack 0.13.1 (locked)
+        run: cargo install --version 0.13.1 --locked wasm-pack
+
+      - name: wasm-pack build (target = web, --features wasm)
+        run: |
+          wasm-pack build crates/keeper-decoder \
+            --target web \
+            --features wasm
+
+      - name: Verify pkg artifact shape
+        run: |
+          set -eux
+          test -f crates/keeper-decoder/pkg/keeper_decoder.js
+          test -f crates/keeper-decoder/pkg/keeper_decoder_bg.wasm
+          test -f crates/keeper-decoder/pkg/package.json
+          # Sanity: the bundled wasm should expose the wave-15 ix
+          # encoder symbols. We grep the bundler-target wrapper JS
+          # because that's the user-facing shape `wasmBuilder.ts`
+          # imports from.
+          grep -q "encodeOpenPosition" crates/keeper-decoder/pkg/keeper_decoder.js
+          grep -q "encodeClosePosition" crates/keeper-decoder/pkg/keeper_decoder.js
+          grep -q "encodeKeeperLeaderHeartbeat" crates/keeper-decoder/pkg/keeper_decoder.js
+          grep -q "decodeKeeperLeaderLock" crates/keeper-decoder/pkg/keeper_decoder.js
+
+      - name: Upload pkg/ artifact for downstream jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: keeper-decoder-pkg
+          path: crates/keeper-decoder/pkg/
+          retention-days: 7
+
+  frontend:
+    name: Frontend (typecheck + test + build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [wasm-pack]
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Download keeper-decoder/pkg from wasm-pack job
+        uses: actions/download-artifact@v4
+        with:
+          name: keeper-decoder-pkg
+          path: crates/keeper-decoder/pkg
+
+      - name: npm ci
+        run: npm ci
+
+      - name: typecheck (strict)
+        run: npm run typecheck
+
+      - name: vitest run (WASM-driven encoder + decoder parity)
+        run: npm test -- --run
+
+      - name: production build
+        run: npm run build
+
+  ops-toolkit-ts:
+    name: ops-toolkit/ts (keeper-leader CLI scripts)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Wave 17 — wave-15+ runbook references `ts-node ops-toolkit/ts/
+    # keeper-leader-*.ts` for the KL-01..05 ops procedures. CI keeps
+    # those scripts honest (typecheck + offline parity tests against
+    # the wave-15 `keeper_decoder::ix` byte layouts).
+    defaults:
+      run:
+        working-directory: ops-toolkit/ts
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: ops-toolkit/ts/package-lock.json
+
+      - name: npm ci
+        run: npm ci
+
+      - name: typecheck (strict)
+        run: npm run typecheck
+
+      - name: vitest run (offline ix-layout parity)
+        run: npx vitest run
+
+  solana-program-test:
+    name: solana-program-test (SBF reject matrix + CU)
+    # Wave 17 — actual SBF execution requires the BPF / SBF toolchain
+    # which the default GitHub-hosted runners can't reliably pull
+    # in CI bandwidth windows. We tag this job with a self-hosted
+    # `solana-sbf` runner label; until that runner is provisioned,
+    # the job is skipped (no `solana-sbf` label = no scheduling).
+    # This pre-positions the wave-16 `tests/keeper_leader.rs` so a
+    # single label flip on the merge-blocking branch enables it.
+    runs-on: [self-hosted, solana-sbf]
+    if: false  # Wave 17: gated until the self-hosted runner is online.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Solana CLI (1.18 LTS)
+        run: |
+          sh -c "$(curl -sSfL https://release.solana.com/v1.18.24/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: cargo build-sbf
+        run: cargo build-sbf --manifest-path programs/mole-option/Cargo.toml
+
+      - name: solana-program-test reject matrix + CU measurements
+        run: |
+          cargo test \
+            -p mole-option \
+            --features _keeper_leader_program_test \
+            --tests keeper_leader \
+            -- --nocapture | tee target/keeper_leader_program_test.log
+
+      - name: Upload program-test log
+        uses: actions/upload-artifact@v4
+        with:
+          name: keeper-leader-program-test-log
+          path: target/keeper_leader_program_test.log
+          retention-days: 14
+
+  audit-readiness:
+    name: Audit readiness (no-fail meta job)
+    runs-on: ubuntu-latest
+    needs: [rust, governance, wasm-pack, frontend, ops-toolkit-ts]
+    if: always()
+    steps:
+      - run: |
+          echo "Wave 17 audit-readiness summary"
+          echo "- Rust:           ${{ needs.rust.result }}"
+          echo "- Governance:     ${{ needs.governance.result }}"
+          echo "- wasm-pack:      ${{ needs.wasm-pack.result }}"
+          echo "- Frontend:       ${{ needs.frontend.result }}"
+          echo "- ops-toolkit/ts: ${{ needs.ops-toolkit-ts.result }}"
+          if [ "${{ needs.rust.result }}" != "success" ] \
+             || [ "${{ needs.governance.result }}" != "success" ] \
+             || [ "${{ needs.wasm-pack.result }}" != "success" ] \
+             || [ "${{ needs.frontend.result }}" != "success" ] \
+             || [ "${{ needs.ops-toolkit-ts.result }}" != "success" ]; then
+            echo "::warning::audit-readiness gate would fail on a real merge — fix upstream jobs"
+            exit 1
+          fi

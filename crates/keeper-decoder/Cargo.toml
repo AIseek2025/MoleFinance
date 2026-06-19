@@ -1,0 +1,54 @@
+[package]
+name = "keeper-decoder"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Borsh-decoded mirrors of the on-chain Anchor accounts the keeper reads, host-side keeper-leader-lock state machine (wave 15), and pure-Rust Anchor instruction encoders (wave 15). Zero-Solana-dep crate that builds on host AND on `wasm32-unknown-unknown`. Wave 15 ships an `wasm` feature that adds `wasm-bindgen` glue + a `cdylib` artifact so the same byte-for-byte schemas drive both the Rust keeper bot (via `keeper-rpc`) and the TypeScript frontend (via the `wasm-pack`-built `keeper_decoder.wasm`)."
+
+[lib]
+# Wave 15 — `cdylib` exposes a wasm dynamic library suitable for
+# `wasm-pack build --target web`. `rlib` keeps the host-side `cargo
+# build -p keeper-decoder` path producing a normal Rust library
+# linkable into `keeper-rpc` / `chain-mirror` / tests.
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# Default compile path stays pure-Rust + zero JS glue, so host crates
+# (`keeper-rpc`, `chain-mirror`) and the wave-14 `cargo test
+# --workspace` pipeline don't pull in `wasm-bindgen`. The `wasm`
+# feature opts into the wave-15 wasm-pack target — JS bindings,
+# `console_error_panic_hook`, and the `getrandom/js` shim that
+# downstream `sha2` / future hashing deps pick up automatically.
+default = []
+wasm = [
+    "dep:wasm-bindgen",
+    "dep:js-sys",
+    "dep:console_error_panic_hook",
+    "dep:getrandom",
+]
+
+[dependencies]
+borsh = { version = "1.5", default-features = false, features = ["derive"] }
+thiserror = { workspace = true }
+# Wave 15 — Anchor instruction-discriminator computation on the host
+# AND on wasm32. `sha2 = 0.10` is `no_std + alloc` friendly; default
+# features are kept (the asm path is auto-cfg'd off on wasm32).
+sha2 = "0.10"
+
+# === wave-15 wasm-only deps ===
+# Each is `optional = true` so the wave-14 host path stays the same.
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
+console_error_panic_hook = { version = "0.1", optional = true }
+# `getrandom`'s `js` feature wires `crypto.getRandomValues` so any
+# transitive caller that needs randomness on wasm doesn't fail at
+# instantiation. Wave 15 doesn't draw randomness directly; this is
+# defensive against future ix encoders that might need it.
+getrandom = { version = "0.2", features = ["js"], optional = true }
+
+[dev-dependencies]
+# host-only — these never compile against wasm32; they exist purely
+# to exercise the encode/decode round-trip with realistic fixtures.
+proptest = { workspace = true }

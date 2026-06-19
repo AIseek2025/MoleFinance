@@ -1,0 +1,43 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/molemath",
+    "crates/clearing-core",
+    "crates/simulation",
+    "crates/indexer",
+    "crates/pyth-adapter",
+    "crates/protocol-harness",
+    "crates/chain-mirror",
+    "crates/keeper",
+    "crates/keeper-decoder",
+    "crates/keeper-rpc",
+    "crates/keeper-bot",
+    "crates/ops-toolkit",
+    "crates/tx-codec",
+]
+exclude = [
+    "programs/mole-option",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["MoleOption Team"]
+license = "Apache-2.0"
+repository = "https://github.com/MoleOption/MoleOption"
+rust-version = "1.79"
+
+[workspace.dependencies]
+thiserror = "1.0"
+proptest = "1.5"
+rand = "0.8"
+rand_chacha = "0.3"
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+overflow-checks = true

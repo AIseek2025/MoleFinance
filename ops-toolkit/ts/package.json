@@ -1,0 +1,21 @@
+{
+  "name": "@mole/ops-toolkit-ts",
+  "version": "0.1.0",
+  "description": "Wave 17 — TypeScript ops scripts for keeper-leader-lock administration. Read-only `show` + write-side init/acquire/release/heartbeat. Companion to crates/ops-toolkit (Rust read-only health checks).",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.95.3",
+    "bs58": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  }
+}

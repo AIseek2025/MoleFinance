@@ -1,0 +1,15 @@
+target/
+**/*.rs.bk
+Cargo.lock
+.DS_Store
+.idea/
+.vscode/
+.anchor/
+test-ledger/
+node_modules/
+frontend/dist/
+.env
+.env.*
+!.env.example
+.cache/
+*.log

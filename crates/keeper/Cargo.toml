@@ -1,0 +1,16 @@
+[package]
+name = "keeper"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Host-side keeper scheduler — derives `pre_sync_dormant_bucket` / `close_dormant_bucket` / `init_dormant_bucket` action queues from a chain view of the dormant bridge state."
+
+[dependencies]
+clearing-core = { path = "../clearing-core" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+chain-mirror = { path = "../chain-mirror" }
+molemath = { path = "../molemath" }

@@ -1,0 +1,19 @@
+[package]
+name = "protocol-harness"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "End-to-end MoleOption protocol simulator: vault accounting + multi-sub-pool clearing + indexer in lock-step. Property-tests conservation, vault consistency, indexer parity, and adversarial paths."
+
+[dependencies]
+molemath = { path = "../molemath" }
+clearing-core = { path = "../clearing-core" }
+indexer = { path = "../indexer" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }

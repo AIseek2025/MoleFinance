@@ -1,0 +1,21 @@
+[package]
+name = "chain-mirror"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+molemath = { path = "../molemath" }
+clearing-core = { path = "../clearing-core" }
+indexer = { path = "../indexer" }
+keeper-decoder = { path = "../keeper-decoder" }
+thiserror.workspace = true
+
+[dev-dependencies]
+protocol-harness = { path = "../protocol-harness" }
+rand.workspace = true
+rand_chacha.workspace = true
+proptest.workspace = true
