@@ -2,14 +2,14 @@
 seeds = false
 skip-lint = false
 
-[programs.localnet]
-mole_option = "Mo1eOpt1onPLAceho1der111111111111111111111111"
+[programs.devnet]
+mole_option = "EWqyK5r4MyNaewo2s6nqLmZEVt4Xcx1yNT2dfFnTSfWp"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
+cluster = "Devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

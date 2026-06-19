@@ -69,7 +69,7 @@ pub use state::*;
 // `Pubkey`; visual placeholders containing the letter `O`, `0`, `I`, or
 // `l` are rejected by the base58 alphabet, and "long" placeholders may
 // silently decode to >32 bytes.
-declare_id!("11111111111111111111111111111111");
+declare_id!("EWqyK5r4MyNaewo2s6nqLmZEVt4Xcx1yNT2dfFnTSfWp");
 
 #[program]
 pub mod mole_option {
