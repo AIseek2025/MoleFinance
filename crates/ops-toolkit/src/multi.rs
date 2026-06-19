@@ -153,7 +153,16 @@ pub fn render_json_multi(report: &MultiMarketHealthReport) -> String {
         out.push_str("\":");
         out.push_str(&render_json(&m.report));
     }
-    out.push_str("}}");
+    out.push('}');
+    // Wave 29 — embed the protocol-wide rollup so a single read of the
+    // daemon's snapshot answers "is the whole protocol healthy?" without
+    // the consumer re-folding every per-market report. Mirrors the
+    // frontend Overview page's protocol pulse.
+    out.push_str(",\"protocol\":");
+    out.push_str(&crate::protocol_summary::render_protocol_summary_json(
+        &crate::protocol_summary::summarize_protocol(report),
+    ));
+    out.push('}');
     out
 }
 
@@ -351,5 +360,26 @@ mod tests {
         let sol_idx = json.find("\"SOL-USD\"").unwrap();
         let btc_idx = json.find("\"BTC-USD\"").unwrap();
         assert!(sol_idx < btc_idx, "SOL-USD must precede BTC-USD");
+        // Wave 29 — protocol rollup block is embedded after markets.
+        assert!(json.contains("\"protocol\":{\"markets\":2"));
+        assert!(json.contains("\"overall_status\":\"PASS\""));
+        assert!(json.ends_with("}"));
+    }
+
+    #[test]
+    fn render_json_multi_protocol_block_reflects_critical() {
+        let registry = registry_two_markets(false);
+        let report = scan_all_markets(&registry, |entry| {
+            let mut ctx = happy_base_ctx();
+            if entry.symbol == "BTC-USD" {
+                ctx.market.paused_globally = true;
+            }
+            Ok(ctx)
+        })
+        .unwrap();
+        let json = render_json_multi(&report);
+        assert!(json.contains("\"protocol\":{\"markets\":2"));
+        assert!(json.contains("\"critical_markets\":1"));
+        assert!(json.contains("\"overall_status\":\"CRITICAL\""));
     }
 }

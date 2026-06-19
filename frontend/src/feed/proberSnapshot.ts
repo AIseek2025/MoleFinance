@@ -27,10 +27,28 @@ export interface ProberMarketHealth {
   checks: ProberCheck[];
 }
 
+/**
+ * Wave 29 — protocol-wide rollup emitted alongside the per-market
+ * reports (backend `ops_toolkit::protocol_summary`). Optional for
+ * back-compat with pre-wave-29 snapshots that only carried `markets`.
+ */
+export interface ProberProtocol {
+  markets: number;
+  healthyMarkets: number;
+  warnMarkets: number;
+  criticalMarkets: number;
+  firingChecks: number;
+  worstExitCode: number;
+  overallStatus: ProberCheckStatus;
+  highestFiringSeverity: string;
+}
+
 /** The full multi-market prober snapshot. */
 export interface ProberSnapshot {
   worstExitCode: number;
   markets: Map<string, ProberMarketHealth>;
+  /** Protocol rollup; `undefined` for pre-wave-29 snapshots. */
+  protocol?: ProberProtocol;
 }
 
 /** The wave-24 reconciliation check name — surfaced prominently. */
@@ -123,9 +141,33 @@ export function parseProberSnapshot(text: string): ProberSnapshot {
   for (const [symbol, raw] of Object.entries(markets)) {
     out.set(symbol, parseMarket(symbol, raw));
   }
-  return {
+  const snapshot: ProberSnapshot = {
     worstExitCode: asNumber(root.worst_exit_code, "worst_exit_code"),
     markets: out,
+  };
+  if (root.protocol !== undefined) {
+    snapshot.protocol = parseProtocol(root.protocol);
+  }
+  return snapshot;
+}
+
+function parseProtocol(v: unknown): ProberProtocol {
+  const obj = asRecord(v, "protocol");
+  return {
+    markets: asNumber(obj.markets, "protocol.markets"),
+    healthyMarkets: asNumber(obj.healthy_markets, "protocol.healthy_markets"),
+    warnMarkets: asNumber(obj.warn_markets, "protocol.warn_markets"),
+    criticalMarkets: asNumber(
+      obj.critical_markets,
+      "protocol.critical_markets",
+    ),
+    firingChecks: asNumber(obj.firing_checks, "protocol.firing_checks"),
+    worstExitCode: asNumber(obj.worst_exit_code, "protocol.worst_exit_code"),
+    overallStatus: asCheckStatus(obj.overall_status, "protocol.overall_status"),
+    highestFiringSeverity:
+      typeof obj.highest_firing_severity === "string"
+        ? obj.highest_firing_severity
+        : "NONE",
   };
 }
 

@@ -237,7 +237,7 @@ export function App(): JSX.Element {
   let panel: JSX.Element;
   switch (active) {
     case "overview":
-      panel = <OverviewPanel feed={feed} />;
+      panel = <OverviewPanel feed={feed} prober={proberSnapshot} />;
       break;
     case "trader":
       panel = <TraderPanel feed={feed} wallet={wallet} />;

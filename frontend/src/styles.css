@@ -1043,3 +1043,27 @@ body {
 }
 .ov-pill-active { color: var(--good); border-color: rgba(93, 214, 194, 0.5); }
 .ov-pill-paused { color: var(--warn); border-color: rgba(255, 93, 109, 0.5); }
+
+.ov-health {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+}
+.ov-health-ok { border-color: rgba(93, 214, 194, 0.45); }
+.ov-health-warn { border-color: rgba(255, 181, 71, 0.5); }
+.ov-health-critical { border-color: rgba(255, 93, 109, 0.55); }
+.ov-health-badge {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: 999px;
+}
+.ov-health-badge.ov-health-ok { color: var(--good); background: rgba(93, 214, 194, 0.14); }
+.ov-health-badge.ov-health-warn { color: var(--accent-warm); background: rgba(255, 181, 71, 0.14); }
+.ov-health-badge.ov-health-critical { color: var(--warn); background: rgba(255, 93, 109, 0.14); }
+.ov-health-text { font-size: 13px; color: var(--text-dim); }

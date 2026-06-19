@@ -16,10 +16,41 @@ import {
   longShareBps,
   type MarketStat,
 } from "../feed/protocolStats";
+import type { ProberSnapshot } from "../feed/proberSnapshot";
 import { formatUsdcMicro } from "../format";
 
 interface OverviewPanelProps {
   feed: FeedSnapshot;
+  /** Wave 29 — protocol health from the prober daemon (optional). */
+  prober?: ProberSnapshot | null;
+}
+
+function ProtocolHealthBanner({
+  prober,
+}: {
+  prober: ProberSnapshot | null | undefined;
+}): JSX.Element | null {
+  const p = prober?.protocol;
+  if (!p) return null;
+  const cls =
+    p.overallStatus === "CRITICAL"
+      ? "critical"
+      : p.overallStatus === "WARN"
+        ? "warn"
+        : "ok";
+  return (
+    <div className={`ov-health ov-health-${cls}`}>
+      <span className={`ov-health-badge ov-health-${cls}`}>
+        {p.overallStatus}
+      </span>
+      <span className="ov-health-text">
+        protocol health · {p.healthyMarkets}/{p.markets} healthy
+        {p.warnMarkets > 0 ? ` · ${p.warnMarkets} warn` : ""}
+        {p.criticalMarkets > 0 ? ` · ${p.criticalMarkets} critical` : ""}
+        {p.firingChecks > 0 ? ` · ${p.firingChecks} checks firing` : ""}
+      </span>
+    </div>
+  );
 }
 
 function skewLabel(netSkewMicro: bigint): { text: string; cls: string } {
@@ -51,7 +82,10 @@ function MarketRow({ m }: { m: MarketStat }): JSX.Element {
   );
 }
 
-export function OverviewPanel({ feed }: OverviewPanelProps): JSX.Element {
+export function OverviewPanel({
+  feed,
+  prober,
+}: OverviewPanelProps): JSX.Element {
   const stats = aggregateProtocolStats(feed);
   const skew = skewLabel(stats.netSkewMicro);
   const longBps = longShareBps(stats);
@@ -60,6 +94,7 @@ export function OverviewPanel({ feed }: OverviewPanelProps): JSX.Element {
 
   return (
     <section className="overview">
+      <ProtocolHealthBanner prober={prober} />
       <div className="ov-kpis">
         <div className="ov-card">
           <span className="ov-card-label">Total value locked</span>

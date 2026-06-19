@@ -225,6 +225,25 @@ where
             prom.push_str("mole_prober_worst_exit_code ");
             prom.push_str(&r.worst_exit_code.to_string());
             prom.push('\n');
+            // Wave 29 — protocol-wide rollup gauges so a dashboard can
+            // alert on "N markets critical" without scraping every
+            // per-market block. Mirrors the JSON `protocol` block and
+            // the frontend Overview page.
+            let protocol = crate::protocol_summary::summarize_protocol(r);
+            prom.push_str("# HELP mole_prober_markets Markets scanned by overall status.\n");
+            prom.push_str("# TYPE mole_prober_markets gauge\n");
+            prom.push_str("mole_prober_markets{status=\"total\"} ");
+            prom.push_str(&protocol.markets.to_string());
+            prom.push('\n');
+            prom.push_str("mole_prober_markets{status=\"healthy\"} ");
+            prom.push_str(&protocol.healthy_markets.to_string());
+            prom.push('\n');
+            prom.push_str("mole_prober_markets{status=\"warn\"} ");
+            prom.push_str(&protocol.warn_markets.to_string());
+            prom.push('\n');
+            prom.push_str("mole_prober_markets{status=\"critical\"} ");
+            prom.push_str(&protocol.critical_markets.to_string());
+            prom.push('\n');
             for m in &r.per_market {
                 prom.push_str("# market=");
                 prom.push_str(&m.symbol);

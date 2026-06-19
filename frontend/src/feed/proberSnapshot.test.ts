@@ -68,6 +68,16 @@ function sample(): string {
         ],
       },
     },
+    protocol: {
+      markets: 2,
+      healthy_markets: 1,
+      warn_markets: 0,
+      critical_markets: 1,
+      firing_checks: 2,
+      worst_exit_code: 4,
+      overall_status: "CRITICAL",
+      highest_firing_severity: "P1",
+    },
   });
 }
 
@@ -131,5 +141,31 @@ describe("parseProberSnapshot", () => {
     expect(() => parseProberSnapshot('{"worst_exit_code":0}')).toThrow(
       /markets expected object/,
     );
+  });
+
+  it("decodes the wave-29 protocol rollup block", () => {
+    const snap = parseProberSnapshot(sample());
+    expect(snap.protocol).toBeDefined();
+    expect(snap.protocol?.markets).toBe(2);
+    expect(snap.protocol?.healthyMarkets).toBe(1);
+    expect(snap.protocol?.criticalMarkets).toBe(1);
+    expect(snap.protocol?.firingChecks).toBe(2);
+    expect(snap.protocol?.overallStatus).toBe("CRITICAL");
+    expect(snap.protocol?.highestFiringSeverity).toBe("P1");
+  });
+
+  it("leaves protocol undefined for pre-wave-29 snapshots", () => {
+    const noProtocol = JSON.stringify({
+      worst_exit_code: 0,
+      markets: {
+        "X-USD": {
+          overall_status: "PASS",
+          highest_firing_severity: "NONE",
+          counts: { pass: 1, warn: 0, critical: 0 },
+          checks: [],
+        },
+      },
+    });
+    expect(parseProberSnapshot(noProtocol).protocol).toBeUndefined();
   });
 });

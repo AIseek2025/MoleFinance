@@ -13,6 +13,42 @@ and integrators, and where to look for the proof.
 
 ---
 
+## [Wave 29] — 2026-06-19 — protocol rollup wired end-to-end + go-live checklist
+
+Wave 28 shipped the protocol rollup and Overview page as *code*; wave 29
+makes them live and prepares for launch.
+
+**Backend — rollup is now emitted, not just computed.**
+
+- `render_json_multi` embeds a `"protocol"` block (markets, healthy/warn/
+  critical counts, firing checks, worst exit, overall status) after the
+  per-market reports, so a single read of the prober daemon's JSON
+  snapshot answers "is the whole protocol healthy?".
+- The prober's Prometheus output gains protocol-level gauges
+  `mole_prober_markets{status="total|healthy|warn|critical"}` so a
+  dashboard can alert on "N markets critical" without scraping every
+  per-market block.
+
+**Frontend — Overview page consumes protocol health.**
+
+- `proberSnapshot.ts` parses the new optional `protocol` block
+  (`ProberProtocol`); pre-wave-29 snapshots leave it `undefined`.
+- `OverviewPanel` renders a protocol-health banner (status badge +
+  healthy/warn/critical market counts + firing checks) above the live
+  TVL/OI KPIs, so the landing page shows both scale and health at once.
+
+**Launch prep.** `Docs/Planning/26-发布上线清单.md` — a go-live checklist
+splitting sandbox-ready items from the deploy-time manual steps (contract
+deploy → off-chain services → frontend → go/no-go gates incl. external
+audit).
+
+**Verification.** `cargo test` 465/465 (+1) · clippy clean (default +
+`solana-rpc`) · frontend vitest 154/154 (+2) · typecheck + build clean ·
+all three governance verifiers green (465/465, 103/103, 32/32). No
+contract changes.
+
+---
+
 ## [Wave 28] — 2026-06-19 — pre-launch readiness review + protocol Overview landing page
 
 Acting on a pre-launch development-planning request, we audited every

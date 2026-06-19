@@ -34,9 +34,9 @@ We isolate all three into pure-Rust crates that run on the host. They are exhaus
 
 ## Status
 
-**Wave 28 — pre-launch readiness review (`Docs/Planning/25`): contract surface is launch-complete; the gap was a protocol-level landing page. Shipped a protocol Overview page (TVL / open interest / long-short skew / per-market health) backed by the frontend `protocolStats` aggregation, mirrored by the backend `ops_toolkit::protocol_summary` rollup.**
+**Wave 29 — protocol rollup wired end-to-end + go-live checklist (`Docs/Planning/26`). The prober daemon now emits a `protocol` block in its JSON snapshot + `mole_prober_markets` Prometheus gauges; the Overview landing page consumes them to show a protocol-health banner above the live TVL/OI KPIs. (Wave 28 shipped the rollup + Overview page as code; wave 29 makes them live.)**
 
-**464 Rust tests host-only · 152 frontend vitest tests · 0 failures · clippy clean (`-D warnings`, default + `solana-rpc` features) · `npm run typecheck` clean (strict + `exactOptionalPropertyTypes` + `noUncheckedIndexedAccess` + `verbatimModuleSyntax`) · `npm run build` clean.**
+**465 Rust tests host-only · 154 frontend vitest tests · 0 failures · clippy clean (`-D warnings`, default + `solana-rpc` features) · `npm run typecheck` clean (strict + `exactOptionalPropertyTypes` + `noUncheckedIndexedAccess` + `verbatimModuleSyntax`) · `npm run build` clean.**
 
 Wave 21 closes the four production-readiness gaps wave 20 left at the trait boundary:
 
