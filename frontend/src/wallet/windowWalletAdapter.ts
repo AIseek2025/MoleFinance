@@ -44,7 +44,24 @@ export interface WindowSolanaProvider {
   signAndSendTransaction?: (
     serializedTx: Uint8Array,
   ) => Promise<WindowSolanaSignResult>;
+  /**
+   * Wave 30 — EventEmitter surface exposed by Phantom / Backpack /
+   * Solflare. The adapter subscribes to `accountChanged` (user
+   * switched accounts in the extension → arg is the new PublicKey or
+   * `null`) and `disconnect` (extension dropped the session) so the
+   * React UI reflects out-of-band wallet state changes.
+   */
+  on?: (event: string, handler: (arg: unknown) => void) => void;
+  off?: (event: string, handler: (arg: unknown) => void) => void;
+  removeListener?: (event: string, handler: (arg: unknown) => void) => void;
 }
+
+/** Wave 30 — listener notified when the wallet state changes (connect, */
+/** disconnect, or an out-of-band account switch in the extension). */
+export type WalletChangeListener = (
+  status: WalletStatus,
+  pubkey: Pubkey32 | null,
+) => void;
 
 interface MaybeWindow {
   solana?: WindowSolanaProvider;
@@ -67,6 +84,17 @@ function bytesToHex(bytes: Uint8Array): string {
     hex += b.toString(16).padStart(2, "0");
   }
   return hex;
+}
+
+/** Parse a wallet-provided public-key-ish value into a `Pubkey32`, or */
+/** `null` when the value is missing / malformed. */
+function pubkeyFromMaybe(value: unknown): Pubkey32 | null {
+  if (typeof value !== "object" || value === null) return null;
+  const toBytes = (value as { toBytes?: () => Uint8Array }).toBytes;
+  if (typeof toBytes !== "function") return null;
+  const bytes = toBytes.call(value);
+  if (!bytes || bytes.length !== 32) return null;
+  return { hex: bytesToHex(bytes) };
 }
 
 /**
@@ -95,11 +123,32 @@ export class WindowWalletAdapter implements WalletAdapter {
   private currentStatus: WalletStatus = "disconnected";
   private currentPubkey: Pubkey32 | null = null;
   private readonly providerOverride: WindowSolanaProvider | undefined;
+  private readonly listeners = new Set<WalletChangeListener>();
+  private readonly accountChangedHandler = (arg: unknown): void => {
+    const pk = pubkeyFromMaybe(arg);
+    if (pk) {
+      // User switched to a different account in the extension.
+      this.currentPubkey = pk;
+      this.currentStatus = "connected";
+    } else {
+      // Phantom passes `null` when the active account is locked /
+      // disconnected — treat as a session drop.
+      this.currentPubkey = null;
+      this.currentStatus = "disconnected";
+    }
+    this.emit();
+  };
+  private readonly disconnectHandler = (): void => {
+    this.currentPubkey = null;
+    this.currentStatus = "disconnected";
+    this.emit();
+  };
 
   constructor(opts?: { provider?: WindowSolanaProvider }) {
     this.providerOverride = opts?.provider;
     const s = this.resolveProvider();
     this.name = s ? detectName(s) : "phantom";
+    this.subscribeProviderEvents(s);
   }
 
   /** Test-only — exposes the resolved provider for debug assertions. */
@@ -113,6 +162,68 @@ export class WindowWalletAdapter implements WalletAdapter {
 
   pubkey(): Pubkey32 | null {
     return this.currentPubkey;
+  }
+
+  /**
+   * Wave 30 — subscribe to wallet state changes. The returned function
+   * unsubscribes. Lets React reflect out-of-band changes (account
+   * switch / extension disconnect) without polling.
+   */
+  onChange(listener: WalletChangeListener): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private emit(): void {
+    for (const l of this.listeners) {
+      try {
+        l(this.currentStatus, this.currentPubkey);
+      } catch (e) {
+        console.warn("[mole/frontend] wallet onChange listener threw:", e);
+      }
+    }
+  }
+
+  private subscribeProviderEvents(s: WindowSolanaProvider | undefined): void {
+    if (!s || typeof s.on !== "function") return;
+    s.on("accountChanged", this.accountChangedHandler);
+    s.on("disconnect", this.disconnectHandler);
+  }
+
+  /** Wave 30 — detach provider event listeners. Idempotent. */
+  dispose(): void {
+    const s = this.resolveProvider();
+    const off = s?.off ?? s?.removeListener;
+    if (s && typeof off === "function") {
+      off.call(s, "accountChanged", this.accountChangedHandler);
+      off.call(s, "disconnect", this.disconnectHandler);
+    }
+    this.listeners.clear();
+  }
+
+  /**
+   * Wave 30 — best-effort silent reconnect on page load. Uses the
+   * wallet's `onlyIfTrusted` connect path so a previously-approved
+   * session is restored WITHOUT a popup. Never throws: an untrusted
+   * / missing / locked wallet simply resolves to `null` and the user
+   * connects explicitly via the button.
+   */
+  async eagerConnect(): Promise<Pubkey32 | null> {
+    const s = this.resolveProvider();
+    if (!s || !s.connect) return null;
+    try {
+      const r = await s.connect({ onlyIfTrusted: true });
+      const pk = pubkeyFromMaybe(r.publicKey);
+      if (!pk) return null;
+      this.currentPubkey = pk;
+      this.currentStatus = "connected";
+      this.emit();
+      return pk;
+    } catch {
+      return null;
+    }
   }
 
   async connect(): Promise<Pubkey32> {
@@ -136,17 +247,17 @@ export class WindowWalletAdapter implements WalletAdapter {
         e,
       );
     }
-    const bytes = r.publicKey?.toBytes?.();
-    if (!bytes || bytes.length !== 32) {
+    const pk = pubkeyFromMaybe(r.publicKey);
+    if (!pk) {
       this.currentStatus = "error";
       throw new WalletSignError(
         "ProviderError",
         "WindowWalletAdapter.connect returned no 32-byte public key",
       );
     }
-    const pk: Pubkey32 = { hex: bytesToHex(bytes) };
     this.currentPubkey = pk;
     this.currentStatus = "connected";
+    this.emit();
     return pk;
   }
 
@@ -161,6 +272,7 @@ export class WindowWalletAdapter implements WalletAdapter {
     }
     this.currentStatus = "disconnected";
     this.currentPubkey = null;
+    this.emit();
   }
 
   async signAndSubmit(draft: UnsignedTxDraft): Promise<string> {

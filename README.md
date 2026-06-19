@@ -34,9 +34,9 @@ We isolate all three into pure-Rust crates that run on the host. They are exhaus
 
 ## Status
 
-**Wave 29 — protocol rollup wired end-to-end + go-live checklist (`Docs/Planning/26`). The prober daemon now emits a `protocol` block in its JSON snapshot + `mole_prober_markets` Prometheus gauges; the Overview landing page consumes them to show a protocol-health banner above the live TVL/OI KPIs. (Wave 28 shipped the rollup + Overview page as code; wave 29 makes them live.)**
+**Wave 30 — real browser wallet adapter (Phantom / Backpack / Solflare): multi-wallet discovery (`discoverWallets`), `?wallet=` selection with mock fallback, provider event subscription (`accountChanged` / `disconnect`) + silent eager reconnect (`onlyIfTrusted`). The App now selects a real wallet when installed and reflects out-of-band changes. Real signing still needs a browser extension + devnet (out-of-sandbox).**
 
-**465 Rust tests host-only · 154 frontend vitest tests · 0 failures · clippy clean (`-D warnings`, default + `solana-rpc` features) · `npm run typecheck` clean (strict + `exactOptionalPropertyTypes` + `noUncheckedIndexedAccess` + `verbatimModuleSyntax`) · `npm run build` clean.**
+**465 Rust tests host-only · 175 frontend vitest tests · 0 failures · clippy clean (`-D warnings`, default + `solana-rpc` features) · `npm run typecheck` clean (strict + `exactOptionalPropertyTypes` + `noUncheckedIndexedAccess` + `verbatimModuleSyntax`) · `npm run build` clean.**
 
 Wave 21 closes the four production-readiness gaps wave 20 left at the trait boundary:
 

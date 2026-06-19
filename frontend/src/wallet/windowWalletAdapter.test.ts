@@ -220,6 +220,81 @@ describe("WindowWalletAdapter", () => {
     expect(adapter.name).toBe("solflare");
   });
 
+  it("eagerConnect() silently restores a trusted session", async () => {
+    const connect = vi.fn(async (opts?: { onlyIfTrusted?: boolean }) => {
+      expect(opts?.onlyIfTrusted).toBe(true);
+      return { publicKey: { toBytes: () => pkBytes(9) } };
+    });
+    const adapter = new WindowWalletAdapter({
+      provider: makeProvider({ connect }),
+    });
+    const pk = await adapter.eagerConnect();
+    expect(pk?.hex).toMatch(/^09/);
+    expect(adapter.status()).toBe("connected");
+  });
+
+  it("eagerConnect() returns null (no throw) when not trusted", async () => {
+    const adapter = new WindowWalletAdapter({
+      provider: makeProvider({
+        connect: async () => {
+          throw new Error("not trusted");
+        },
+      }),
+    });
+    expect(await adapter.eagerConnect()).toBeNull();
+    expect(adapter.status()).toBe("disconnected");
+  });
+
+  it("onChange fires on connect / disconnect", async () => {
+    const events: Array<[string, string | null]> = [];
+    const adapter = new WindowWalletAdapter({
+      provider: makeProvider({
+        connect: async () => ({ publicKey: { toBytes: () => pkBytes(3) } }),
+        disconnect: async () => {},
+      }),
+    });
+    adapter.onChange((s, pk) => events.push([s, pk?.hex ?? null]));
+    await adapter.connect();
+    await adapter.disconnect();
+    expect(events.map((e) => e[0])).toEqual(["connected", "disconnected"]);
+  });
+
+  it("reacts to a provider accountChanged event", async () => {
+    let accountChanged: ((arg: unknown) => void) | undefined;
+    const on = vi.fn((event: string, handler: (arg: unknown) => void) => {
+      if (event === "accountChanged") accountChanged = handler;
+    });
+    const adapter = new WindowWalletAdapter({
+      provider: makeProvider({
+        connect: async () => ({ publicKey: { toBytes: () => pkBytes(1) } }),
+        on,
+      }),
+    });
+    await adapter.connect();
+    // User switches accounts in the extension.
+    accountChanged?.({ toBytes: () => pkBytes(42) });
+    expect(adapter.pubkey()?.hex).toMatch(/^2a/);
+    expect(adapter.status()).toBe("connected");
+    // Extension locks / disconnects the account (null payload).
+    accountChanged?.(null);
+    expect(adapter.pubkey()).toBeNull();
+    expect(adapter.status()).toBe("disconnected");
+  });
+
+  it("dispose() detaches provider listeners", async () => {
+    const off = vi.fn();
+    const adapter = new WindowWalletAdapter({
+      provider: makeProvider({
+        on: () => {},
+        off,
+        connect: async () => ({ publicKey: { toBytes: () => pkBytes(1) } }),
+      }),
+    });
+    adapter.dispose();
+    expect(off).toHaveBeenCalledWith("accountChanged", expect.any(Function));
+    expect(off).toHaveBeenCalledWith("disconnect", expect.any(Function));
+  });
+
   it("disconnect() resets status + clears pubkey", async () => {
     const disconnect = vi.fn(async () => {});
     const adapter = new WindowWalletAdapter({

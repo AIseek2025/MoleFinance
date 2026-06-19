@@ -13,6 +13,40 @@ and integrators, and where to look for the proof.
 
 ---
 
+## [Wave 30] — 2026-06-19 — real browser wallet adapter (Phantom / Backpack / Solflare)
+
+Implements the production browser-wallet integration layer in-sandbox.
+The `WindowWalletAdapter` (connect / sign / disconnect + error mapping)
+existed since wave 14; this wave closes the remaining production gaps.
+Real signing still needs a browser extension + devnet (out-of-sandbox),
+but the discovery / selection / event-subscription logic is all here and
+fully unit-tested.
+
+- **Multi-wallet discovery** (`discoverWallets.ts`): Phantom, Backpack and
+  Solflare inject at different `window` keys (plus the legacy
+  `window.solana` alias). `discoverWallets` enumerates the installed
+  wallets in priority order; `pickPreferredWallet` resolves an explicit
+  choice or the best available.
+- **Adapter events + eager reconnect** (`WindowWalletAdapter`):
+  `onChange(listener)` plus subscriptions to the provider's
+  `accountChanged` / `disconnect` events so the UI reflects out-of-band
+  changes (account switch / extension lock). `eagerConnect()` silently
+  restores a trusted session (`onlyIfTrusted`) on load and never throws.
+  `dispose()` detaches listeners.
+- **Session selection** (`selectWallet.ts`): `?wallet=mock|phantom|backpack|
+  solflare|auto` (default `auto`). Auto uses the highest-priority installed
+  wallet and falls back to the mock adapter when no extension is present,
+  so `npm run dev` keeps working with zero wallet.
+- **App wiring**: `selectWalletAdapter()` replaces the hardcoded mock; on
+  mount the app eager-reconnects a real wallet and subscribes to its
+  change events, and disposes listeners on unmount.
+
+**Verification.** frontend vitest 175/175 (wave-29 154 → +21) · typecheck +
+build clean · cargo test 465/465 (no Rust changes) · clippy clean · three
+governance verifiers green. No contract changes.
+
+---
+
 ## [Wave 29] — 2026-06-19 — protocol rollup wired end-to-end + go-live checklist
 
 Wave 28 shipped the protocol rollup and Overview page as *code*; wave 29

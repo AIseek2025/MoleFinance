@@ -25,7 +25,7 @@ import { mergeKeeperMetricsIntoFeed } from "./feed/keeperMetricsMulti";
 import type { FeedAdapter } from "./feed";
 import { MOLE_ACCOUNT_DISCRIMINATORS } from "./decoder/discriminators";
 import { parseMarketsConfig } from "./marketRegistry";
-import { MockWalletAdapter } from "./wallet";
+import { selectWalletAdapter, WindowWalletAdapter } from "./wallet";
 import { useActiveMarket } from "./useActiveMarket";
 import { useKeeperMetricsMulti } from "./useKeeperMetricsMulti";
 import { useProberSnapshot } from "./useProberSnapshot";
@@ -142,7 +142,11 @@ export function App(): JSX.Element {
   const built = useMemo(() => buildAdapter(), []);
   const adapter = built.adapter;
   const expectedLeaders = built.expectedLeaders;
-  const wallet = useMemo<WalletAdapter>(() => new MockWalletAdapter(), []);
+  // Wave 30 — pick a real browser wallet (Phantom / Backpack / Solflare)
+  // when one is installed, else fall back to the offline mock adapter.
+  // `?wallet=mock` forces the mock; `?wallet=<name>` forces a specific
+  // installed wallet.
+  const wallet = useMemo<WalletAdapter>(() => selectWalletAdapter(), []);
   const [walletStatus, setWalletStatus] = useState<WalletStatus>(wallet.status());
   const [walletPubkey, setWalletPubkey] = useState(wallet.pubkey());
 
@@ -196,7 +200,22 @@ export function App(): JSX.Element {
       setWalletStatus(wallet.status());
       setWalletPubkey(wallet.pubkey());
     }, 250);
-    return () => clearInterval(id);
+    // Wave 30 — for real browser wallets, attempt a silent reconnect on
+    // load and react to out-of-band changes (account switch / extension
+    // disconnect) via the provider event stream.
+    let unsubscribe: (() => void) | undefined;
+    if (wallet instanceof WindowWalletAdapter) {
+      unsubscribe = wallet.onChange((s, pk) => {
+        setWalletStatus(s);
+        setWalletPubkey(pk);
+      });
+      void wallet.eagerConnect();
+    }
+    return () => {
+      clearInterval(id);
+      unsubscribe?.();
+      if (wallet instanceof WindowWalletAdapter) wallet.dispose();
+    };
   }, [wallet]);
 
   if (!feed) {
