@@ -157,7 +157,7 @@ export const vi: Resources = {
     demoMarket: "Demo",
     demoMarketHint:
       "Thị trường này có trong danh mục nhưng chưa được tạo on-chain — giá và biểu đồ là mô phỏng cho đến khi keeper khởi tạo.",
-    chartNote: "Nguồn giá · oracle cấp theo block (devnet)",
+    chartNote: "Biểu đồ thời gian thực · TradingView · thanh toán theo oracle on-chain",
     marketOrder: "Lệnh Thị Trường",
     marketOrderNote: "thanh toán theo block ở giá oracle",
     margin: "Ký Quỹ (USDC)",

@@ -58,6 +58,7 @@ import {
 
 import {
   isDisplayablePosition,
+  latestSubPoolPrice,
   onchainDormantBucketToSummary,
   onchainMarketToSummary,
   onchainPositionToSummary,
@@ -524,6 +525,11 @@ export class WebSocketFeedAdapter implements FeedAdapter {
         return onchainSubPoolToSummary(sp, pkHex);
       },
     );
+    const latestPrice = latestSubPoolPrice(this.state.subPools.values());
+    if (latestPrice) {
+      marketSummary.midPriceMicro = latestPrice.midPriceMicro;
+      marketSummary.lastOracleSlot = latestPrice.lastOracleSlot;
+    }
     const dormantBuckets: DormantBucketSummary[] = Array.from(
       this.state.dormantBuckets.values(),
     ).map((b) =>

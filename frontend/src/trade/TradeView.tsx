@@ -30,7 +30,9 @@ import {
   type CatalogSymbol,
 } from "../markets/catalog";
 import { useTickers } from "../markets/syntheticTicker";
+import { useRealQuotes } from "../markets/realQuotes";
 import { PriceChart } from "./PriceChart";
+import { TradingViewChart, tradingViewSymbol } from "./TradingViewChart";
 import { MarketBrowser } from "./MarketBrowser";
 import "./trade.css";
 
@@ -119,7 +121,7 @@ export function TradeView({
   onHome,
   onConsole,
 }: Props): JSX.Element {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const market = feed.indexer.market;
 
   // ── catalog-driven market + leverage selection ────────────────────────
@@ -132,6 +134,9 @@ export function TradeView({
     [selectedBase],
   );
   const tiers = useMemo(() => tiersFor(sym), [sym]);
+  // Real TradingView K-line for any base with a public market feed; bases
+  // without one fall back to the on-chain oracle-tick chart.
+  const tvSym = tradingViewSymbol(selectedBase);
   const [leverage, setLeverage] = useState<number>(() =>
     tiers.includes(PREFERRED_DEFAULT_LEVERAGE)
       ? PREFERRED_DEFAULT_LEVERAGE
@@ -172,13 +177,21 @@ export function TradeView({
     if (livePriceUsd != null && livePriceUsd > 0) m.set(selectedBase, livePriceUsd);
     return m;
   }, [livePriceUsd, selectedBase]);
-  const tickers = useTickers(liveOverrides);
+  const realQuotes = useRealQuotes();
+  const tickers = useTickers(liveOverrides, realQuotes);
   const activeTicker = tickers.get(selectedBase);
   const priceUsd = activeTicker?.price ?? sym.basePriceUsd;
   const change24h = activeTicker?.change24hPct ?? 0;
   const volume24h = activeTicker?.volume24hUsd ?? 0;
   const priceIsLive = activeTicker?.live ?? false;
   const up = change24h >= 0;
+
+  // The marquee / chart show the real underlying market price, but the
+  // on-chain protocol settles against the oracle (SubPool.last_price) pushed
+  // by the keeper. Order envelopes MUST be built around that on-chain price or
+  // open/close will fail the ±0.5% envelope validation. Fall back to the
+  // displayed price for demo (mock-wallet) markets that have no live feed.
+  const settlementPriceUsd = livePriceUsd ?? priceUsd;
 
   // ── order form state ───────────────────────────────────────────────────
   const [side, setSide] = useState<Direction>("Long");
@@ -229,7 +242,7 @@ export function TradeView({
     if (!wasmReady || marketDisabled || busy) return;
     setBusy(true);
     try {
-      const envelope = buildEnvelopeFromUsd(priceUsd, market.lastOracleSlot);
+      const envelope = buildEnvelopeFromUsd(settlementPriceUsd, market.lastOracleSlot);
       const ownerHex = wallet.pubkey()?.hex;
       const positionId = nextPositionId(ownerHex);
       const grossAmount = BigInt(Math.max(0, Math.floor(collateral))) * 1_000_000n;
@@ -281,7 +294,7 @@ export function TradeView({
     if (!connected || !wasmReady || busy) return;
     setBusy(true);
     try {
-      const envelope = buildEnvelopeFromUsd(priceUsd, market.lastOracleSlot);
+      const envelope = buildEnvelopeFromUsd(settlementPriceUsd, market.lastOracleSlot);
       const borshBytes = buildClosePositionTx({
         envelope,
         longBucketCount: 0,
@@ -411,11 +424,20 @@ export function TradeView({
               </div>
               <span className="tv-chart-note">{t("trade.chartNote")}</span>
             </div>
-            <PriceChart
-              priceUsd={Number.isFinite(priceUsd) ? priceUsd : null}
-              intervalSec={intervalSec}
-              symbol={onchainSymbol}
-            />
+            {tvSym ? (
+              <TradingViewChart
+                tvSymbol={tvSym}
+                intervalSec={intervalSec}
+                lang={i18n.language}
+                label={`${selectedBase}-USDC`}
+              />
+            ) : (
+              <PriceChart
+                priceUsd={priceIsLive && Number.isFinite(priceUsd) ? priceUsd : null}
+                intervalSec={intervalSec}
+                symbol={onchainSymbol}
+              />
+            )}
           </div>
 
           <div className="tv-bottom">

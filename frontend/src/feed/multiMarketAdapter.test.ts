@@ -333,6 +333,13 @@ describe("MultiMarketFeedAdapter", () => {
       programId: pk(1),
       markets: MARKETS.slice(0, 2),
       connectionFactory: () => stub,
+      discriminators: {
+        market: MARKET_DISC,
+        subPool: SUB_POOL_DISC,
+        dormantBucket: BUCKET_DISC,
+        distributionLedger: LEDGER_DISC,
+        position: POSITION_DISC,
+      },
     });
     const snaps: FeedSnapshot[] = [];
     adapter.start((s) => snaps.push(s));
@@ -426,13 +433,13 @@ describe("MultiMarketFeedAdapter", () => {
     const sol = last.marketsView!.entries.get("SOL-USD")!;
     expect(sol.marketSummary).toBeDefined();
     expect(sol.marketSummary!.paused).toBe(true);
-    expect(sol.marketSummary!.midPriceMicro).toBe(99_999n);
+    expect(sol.marketSummary!.midPriceMicro).toBe(0n);
     // BTC-USD has no market bytes yet — summary stays undefined.
     const btc = last.marketsView!.entries.get("BTC-USD")!;
     expect(btc.marketSummary).toBeUndefined();
     // Wave-17 legacy `indexer.market` mirrors primary's summary.
     expect(last.indexer.market.paused).toBe(true);
-    expect(last.indexer.market.midPriceMicro).toBe(99_999n);
+    expect(last.indexer.market.midPriceMicro).toBe(0n);
   });
 
   it("subscribes to onProgramAccountChange when discriminators provided", () => {

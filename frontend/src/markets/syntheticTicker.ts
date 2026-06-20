@@ -11,6 +11,7 @@
 import { useEffect, useState } from "react";
 
 import { CATALOG, type CatalogSymbol } from "./catalog";
+import type { RealQuote } from "./realQuotes";
 
 export interface Ticker {
   base: string;
@@ -73,6 +74,7 @@ export function syntheticTicker(sym: CatalogSymbol, nowMs: number): Ticker {
  */
 export function useTickers(
   liveOverrides?: Map<string, number>,
+  realQuotes?: Map<string, RealQuote>,
   intervalMs = 2000,
 ): Map<string, Ticker> {
   const [now, setNow] = useState(() => Date.now());
@@ -84,8 +86,18 @@ export function useTickers(
   const out = new Map<string, Ticker>();
   for (const sym of CATALOG) {
     const tk = syntheticTicker(sym, now);
+    const real = realQuotes?.get(sym.base);
     const live = liveOverrides?.get(sym.base);
-    if (live != null && Number.isFinite(live) && live > 0) {
+    if (real) {
+      // Real market quote (matches the TradingView chart) wins.
+      out.set(sym.base, {
+        ...tk,
+        price: real.price,
+        change24hPct: real.change24hPct,
+        volume24hUsd: real.volume24hUsd,
+        live: true,
+      });
+    } else if (live != null && Number.isFinite(live) && live > 0) {
       const change = ((live - sym.basePriceUsd) / sym.basePriceUsd) * 100;
       out.set(sym.base, { ...tk, price: live, change24hPct: change, live: true });
     } else {

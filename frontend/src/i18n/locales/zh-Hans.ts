@@ -155,7 +155,7 @@ export const zhHans: Resources = {
     demoMarket: "演示",
     demoMarketHint:
       "该市场已在目录中，但尚未在链上开通——价格与K线为模拟，待 keeper 引导建场后切换为真实数据。",
-    chartNote: "价格源 · 预言机逐块喂价（devnet）",
+    chartNote: "实时行情图 · TradingView · 按链上预言机结算",
     marketOrder: "市价单",
     marketOrderNote: "按预言机价格逐块结算",
     margin: "保证金 (USDC)",

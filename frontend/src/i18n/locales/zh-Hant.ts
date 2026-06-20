@@ -155,7 +155,7 @@ export const zhHant: Resources = {
     demoMarket: "示範",
     demoMarketHint:
       "此市場已在目錄中，但尚未在鏈上開通——價格與K線為模擬，待 keeper 引導建場後切換為真實資料。",
-    chartNote: "價格源 · 預言機逐塊餵價（devnet）",
+    chartNote: "即時行情圖 · TradingView · 依鏈上預言機結算",
     marketOrder: "市價單",
     marketOrderNote: "按預言機價格逐塊結算",
     margin: "保證金 (USDC)",

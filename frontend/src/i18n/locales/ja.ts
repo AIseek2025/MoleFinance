@@ -157,7 +157,7 @@ export const ja: Resources = {
     demoMarket: "デモ",
     demoMarketHint:
       "この市場はカタログに登録済みですが、まだオンチェーンで開設されていません。keeper が初期化するまで価格とチャートはシミュレーションです。",
-    chartNote: "価格ソース · ブロックごとのオラクル供給（devnet）",
+    chartNote: "リアルタイムチャート · TradingView · オンチェーンオラクルで決済",
     marketOrder: "成行",
     marketOrderNote: "オラクル価格でブロックごとに清算",
     margin: "証拠金 (USDC)",

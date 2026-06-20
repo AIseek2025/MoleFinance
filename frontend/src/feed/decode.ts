@@ -33,6 +33,30 @@ export function isDisplayablePosition(status: number): boolean {
   return status !== POSITION_STATUS_CLOSED;
 }
 
+const ORACLE_PRICE_SCALE = 100_000_000n;
+const UI_PRICE_SCALE = 1_000_000n;
+
+export function oraclePriceToMicro(price: bigint): bigint {
+  return (price * UI_PRICE_SCALE) / ORACLE_PRICE_SCALE;
+}
+
+export function latestSubPoolPrice(
+  subPools: Iterable<OnchainSubPool>,
+): { midPriceMicro: bigint; lastOracleSlot: number } | null {
+  let latest: { rawPrice: bigint; slot: bigint } | null = null;
+  for (const sp of subPools) {
+    if (sp.last_price <= 0n || sp.last_sync_slot <= 0n) continue;
+    if (latest === null || sp.last_sync_slot > latest.slot) {
+      latest = { rawPrice: sp.last_price, slot: sp.last_sync_slot };
+    }
+  }
+  if (latest === null) return null;
+  return {
+    midPriceMicro: oraclePriceToMicro(latest.rawPrice),
+    lastOracleSlot: Number(latest.slot),
+  };
+}
+
 /**
  * Convert a decoded `OnchainMarket` (Borsh shape) into the
  * trader-panel-friendly `MarketSummary`. `marketPdaHex` is the
@@ -54,7 +78,9 @@ export function onchainMarketToSummary(
     paused: market.paused,
     pausedGlobally: market.paused,
     frozenNewPosition: market.frozen_new_position,
-    midPriceMicro: market.price_tick,
+    // `Market.price_tick` is the discretization step, not the live price.
+    // Adapters override this with the freshest `SubPool.last_price` when available.
+    midPriceMicro: 0n,
     lastOracleSlot: 0,
     currentSlot,
     currentTotalPrincipal: market.current_total_principal,

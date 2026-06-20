@@ -157,7 +157,7 @@ export const ko: Resources = {
     demoMarket: "데모",
     demoMarketHint:
       "이 시장은 카탈로그에 있지만 아직 온체인에 개설되지 않았습니다. keeper가 부트스트랩할 때까지 가격과 차트는 시뮬레이션입니다.",
-    chartNote: "가격 소스 · 블록 단위 오라클 공급(devnet)",
+    chartNote: "실시간 차트 · TradingView · 온체인 오라클로 정산",
     marketOrder: "시장가",
     marketOrderNote: "오라클 가격으로 블록마다 정산",
     margin: "증거금 (USDC)",

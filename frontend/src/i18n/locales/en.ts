@@ -158,7 +158,7 @@ export const en = {
     demoMarket: "Demo",
     demoMarketHint:
       "This market is in the catalog but not yet provisioned on-chain — price & chart are simulated until the keeper bootstraps it.",
-    chartNote: "Price source · per-block oracle feed (devnet)",
+    chartNote: "Live market chart · TradingView · settled at on-chain oracle",
     marketOrder: "Market",
     marketOrderNote: "settled per-block at oracle price",
     margin: "Margin (USDC)",

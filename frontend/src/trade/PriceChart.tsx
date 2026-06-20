@@ -5,11 +5,12 @@ import {
   ColorType,
   CrosshairMode,
   type CandlestickData,
-  type HistogramData,
   type IChartApi,
   type ISeriesApi,
   type UTCTimestamp,
 } from "lightweight-charts";
+
+import { baseOf, findSymbol } from "../markets/catalog";
 
 interface Props {
   /** Live mid price in USD. New values fold into the current candle. */
@@ -25,65 +26,91 @@ interface Candle {
   high: number;
   low: number;
   close: number;
-  volume: number;
 }
 
 const UP = "#36d399";
 const DOWN = "#ff5d6d";
-const UP_VOL = "rgba(54, 211, 153, 0.45)";
-const DOWN_VOL = "rgba(255, 93, 109, 0.45)";
+const STORAGE_PREFIX = "mole.realCandles.v1";
+const MAX_CANDLES = 240;
 
-/**
- * Devnet exposes no OHLC history, so we synthesize a believable backfill
- * around the first observed price (a seeded random walk) and then fold
- * every live price tick into the trailing candle. Volume is synthesized
- * alongside each candle (proportional to the candle's range + noise) so
- * the chart carries a VOL histogram like a real venue.
- */
-function seedHistory(price: number, intervalSec: number, count: number): Candle[] {
-  const now = Math.floor(Date.now() / 1000);
-  const startBucket = Math.floor(now / intervalSec) * intervalSec;
-  const out: Candle[] = [];
-  let p = price;
-  // Larger timeframes accumulate more variance per candle (~sqrt of time),
-  // so scale the synthetic volatility accordingly — a 1Y candle should
-  // swing far more than a 1m candle.
-  const vol = Math.min(9, Math.max(1, Math.sqrt(intervalSec / 60)));
-  const volBase = 800 * Math.sqrt(intervalSec / 60); // arbitrary turnover units
-  const prices: number[] = [p];
-  for (let i = 0; i < count; i += 1) {
-    const drift = (Math.sin(i / 6) + Math.cos(i / 11)) * 0.0011 * vol;
-    const noise = (Math.random() - 0.5) * 0.004 * vol;
-    p = p / (1 + drift + noise);
-    prices.push(p);
+function storageKey(symbol: string, intervalSec: number): string {
+  return `${STORAGE_PREFIX}:${symbol}:${intervalSec}`;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isPlausibleAbsolutePrice(price: number, expectedPriceUsd: number | null): boolean {
+  if (!Number.isFinite(price) || price <= 0) return false;
+  if (expectedPriceUsd == null || expectedPriceUsd <= 0) return true;
+  return price >= expectedPriceUsd / 100 && price <= expectedPriceUsd * 100;
+}
+
+function sanitizeHistory(raw: unknown, expectedPriceUsd: number | null): Candle[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(
+      (item): item is Candle =>
+        !!item &&
+        typeof item === "object" &&
+        isFiniteNumber((item as Candle).time) &&
+        isFiniteNumber((item as Candle).open) &&
+        isFiniteNumber((item as Candle).high) &&
+        isFiniteNumber((item as Candle).low) &&
+        isFiniteNumber((item as Candle).close) &&
+        isPlausibleAbsolutePrice((item as Candle).open, expectedPriceUsd) &&
+        isPlausibleAbsolutePrice((item as Candle).high, expectedPriceUsd) &&
+        isPlausibleAbsolutePrice((item as Candle).low, expectedPriceUsd) &&
+        isPlausibleAbsolutePrice((item as Candle).close, expectedPriceUsd),
+    )
+    .sort((a, b) => a.time - b.time)
+    .slice(-MAX_CANDLES);
+}
+
+function loadHistory(
+  symbol: string,
+  intervalSec: number,
+  expectedPriceUsd: number | null,
+): Candle[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.sessionStorage.getItem(storageKey(symbol, intervalSec));
+    return raw ? sanitizeHistory(JSON.parse(raw), expectedPriceUsd) : [];
+  } catch {
+    return [];
   }
-  prices.reverse();
-  for (let i = 0; i < count; i += 1) {
-    const open = prices[i]!;
-    const close = prices[i + 1]!;
-    const wick =
-      Math.abs(open - close) + open * (Math.random() * 0.0025 + 0.0006) * vol;
-    const swing = Math.abs(open - close) / Math.max(open, 1e-9);
-    const volume = volBase * (0.4 + Math.random() * 0.9 + swing * 40);
-    out.push({
-      time: startBucket - (count - i) * intervalSec,
-      open,
-      high: Math.max(open, close) + wick * Math.random(),
-      low: Math.min(open, close) - wick * Math.random(),
-      close,
-      volume,
-    });
+}
+
+function saveHistory(symbol: string, intervalSec: number, history: Candle[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(
+      storageKey(symbol, intervalSec),
+      JSON.stringify(history.slice(-MAX_CANDLES)),
+    );
+  } catch {
+    // ignore storage write failures
   }
-  return out;
+}
+
+function toSeriesData(history: Candle[]): CandlestickData[] {
+  return history.map((c) => ({
+    time: c.time as UTCTimestamp,
+    open: c.open,
+    high: c.high,
+    low: c.low,
+    close: c.close,
+  }));
 }
 
 export function PriceChart({ priceUsd, intervalSec, symbol }: Props): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  const volRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const candleRef = useRef<Candle | null>(null);
-  const seededRef = useRef(false);
+  const historyRef = useRef<Candle[]>([]);
+  const expectedPriceUsd = findSymbol(baseOf(symbol))?.basePriceUsd ?? null;
 
   // Build the chart once per timeframe.
   useEffect(() => {
@@ -100,7 +127,7 @@ export function PriceChart({ priceUsd, intervalSec, symbol }: Props): JSX.Elemen
         horzLines: { color: "rgba(42, 51, 64, 0.4)" },
       },
       crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: { borderColor: "#1e2733", scaleMargins: { top: 0.08, bottom: 0.26 } },
+      rightPriceScale: { borderColor: "#1e2733", scaleMargins: { top: 0.08, bottom: 0.08 } },
       timeScale: {
         borderColor: "#1e2733",
         timeVisible: true,
@@ -116,79 +143,69 @@ export function PriceChart({ priceUsd, intervalSec, symbol }: Props): JSX.Elemen
       wickUpColor: UP,
       wickDownColor: DOWN,
     });
-    // Volume histogram pinned to the bottom ~20% via an overlay price scale.
-    const volume = chart.addHistogramSeries({
-      priceFormat: { type: "volume" },
-      priceScaleId: "vol",
-    });
-    chart.priceScale("vol").applyOptions({
-      scaleMargins: { top: 0.82, bottom: 0 },
-    });
     chartRef.current = chart;
     seriesRef.current = series;
-    volRef.current = volume;
-    seededRef.current = false;
     candleRef.current = null;
+    historyRef.current = [];
     return () => {
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
-      volRef.current = null;
     };
   }, [intervalSec]);
 
-  // Re-seed history when the underlying symbol changes so the chart
-  // jumps to the newly selected market's price band immediately.
-  useEffect(() => {
-    seededRef.current = false;
-    candleRef.current = null;
-  }, [symbol]);
-
-  // Fold live prices into candles + volume.
+  // Load previously observed real candles for this symbol/timeframe.
   useEffect(() => {
     const series = seriesRef.current;
-    const volSeries = volRef.current;
-    if (!series || !volSeries || priceUsd == null || !Number.isFinite(priceUsd)) return;
+    if (!series) return;
+    const history = loadHistory(symbol, intervalSec, expectedPriceUsd);
+    historyRef.current = history;
+    candleRef.current = history.length > 0 ? { ...history[history.length - 1]! } : null;
+    series.setData(toSeriesData(history));
+    if (history.length > 0) {
+      chartRef.current?.timeScale().fitContent();
+    }
+  }, [symbol, intervalSec, expectedPriceUsd]);
 
-    if (!seededRef.current) {
-      const history = seedHistory(priceUsd, intervalSec, 90);
-      series.setData(
-        history.map((c) => ({
-          time: c.time as UTCTimestamp,
-          open: c.open,
-          high: c.high,
-          low: c.low,
-          close: c.close,
-        })) as CandlestickData[],
-      );
-      volSeries.setData(
-        history.map((c) => ({
-          time: c.time as UTCTimestamp,
-          value: c.volume,
-          color: c.close >= c.open ? UP_VOL : DOWN_VOL,
-        })) as HistogramData[],
-      );
-      const last = history[history.length - 1]!;
-      candleRef.current = { ...last };
-      seededRef.current = true;
+  // Build real candles from live oracle ticks only. No synthetic backfill.
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series || priceUsd == null || !Number.isFinite(priceUsd)) return;
+    if (!isPlausibleAbsolutePrice(priceUsd, expectedPriceUsd)) return;
+
+    const now = Math.floor(Date.now() / 1000);
+    const bucket = Math.floor(now / intervalSec) * intervalSec;
+    const history = historyRef.current;
+    const cur = candleRef.current;
+
+    if (!cur) {
+      const first: Candle = {
+        time: bucket,
+        open: priceUsd,
+        high: priceUsd,
+        low: priceUsd,
+        close: priceUsd,
+      };
+      historyRef.current = [first];
+      candleRef.current = first;
+      saveHistory(symbol, intervalSec, historyRef.current);
+      series.setData(toSeriesData(historyRef.current));
       chartRef.current?.timeScale().fitContent();
       return;
     }
 
-    const now = Math.floor(Date.now() / 1000);
-    const bucket = Math.floor(now / intervalSec) * intervalSec;
-    const cur = candleRef.current;
-    const volBase = 800 * Math.sqrt(intervalSec / 60);
-    if (!cur || bucket > cur.time) {
+    if (bucket > cur.time) {
       const next: Candle = {
         time: bucket,
-        open: cur ? cur.close : priceUsd,
+        open: cur.close,
         high: priceUsd,
         low: priceUsd,
         close: priceUsd,
-        volume: volBase * (0.4 + Math.random() * 0.6),
       };
+      const nextHistory = [...history, next].slice(-MAX_CANDLES);
+      historyRef.current = nextHistory;
       candleRef.current = next;
+      saveHistory(symbol, intervalSec, nextHistory);
       series.update({
         time: next.time as UTCTimestamp,
         open: next.open,
@@ -196,16 +213,14 @@ export function PriceChart({ priceUsd, intervalSec, symbol }: Props): JSX.Elemen
         low: next.low,
         close: next.close,
       });
-      volSeries.update({
-        time: next.time as UTCTimestamp,
-        value: next.volume,
-        color: next.close >= next.open ? UP_VOL : DOWN_VOL,
-      });
     } else {
       cur.close = priceUsd;
       cur.high = Math.max(cur.high, priceUsd);
       cur.low = Math.min(cur.low, priceUsd);
-      cur.volume += volBase * 0.05;
+      if (history.length > 0) {
+        history[history.length - 1] = { ...cur };
+        saveHistory(symbol, intervalSec, history);
+      }
       series.update({
         time: cur.time as UTCTimestamp,
         open: cur.open,
@@ -213,13 +228,8 @@ export function PriceChart({ priceUsd, intervalSec, symbol }: Props): JSX.Elemen
         low: cur.low,
         close: cur.close,
       });
-      volSeries.update({
-        time: cur.time as UTCTimestamp,
-        value: cur.volume,
-        color: cur.close >= cur.open ? UP_VOL : DOWN_VOL,
-      });
     }
-  }, [priceUsd, intervalSec]);
+  }, [priceUsd, intervalSec, symbol, expectedPriceUsd]);
 
   return (
     <div className="tv-chart-wrap">

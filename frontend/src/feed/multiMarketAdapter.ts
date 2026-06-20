@@ -69,6 +69,7 @@ import type {
 import {
   bytesEqual,
   isDisplayablePosition,
+  latestSubPoolPrice,
   onchainDormantBucketToSummary,
   onchainMarketToSummary,
   onchainPositionToSummary,
@@ -413,6 +414,9 @@ export class MultiMarketFeedAdapter implements FeedAdapter {
         e,
       );
     }
+    // A market sample is sufficient to render the trader shell.
+    // Leader-lock bytes may still be warming up or rate-limited.
+    this.primed = true;
     this.maybeEmit(emit);
   }
 
@@ -646,6 +650,11 @@ export class MultiMarketFeedAdapter implements FeedAdapter {
             Number(this.currentSlot ?? 0n),
           )
         : undefined;
+    const latestPrice = latestSubPoolPrice(state.subPools.values());
+    if (marketSummary && latestPrice) {
+      marketSummary.midPriceMicro = latestPrice.midPriceMicro;
+      marketSummary.lastOracleSlot = latestPrice.lastOracleSlot;
+    }
     const out: MarketViewEntry = {
       symbol: state.symbol,
       marketPdaHex: state.marketPdaHex,
