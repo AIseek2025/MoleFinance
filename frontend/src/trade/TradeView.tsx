@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { JSX } from "react";
+import { useTranslation } from "react-i18next";
 import type { Direction, FeedSnapshot } from "../types";
 import type { WalletAdapter, WalletStatus } from "../wallet";
 import {
-  formatPriceMicro,
   formatPubkey,
   formatUsdcMicro,
   formatBigQty,
@@ -13,12 +13,25 @@ import {
   buildOpenPositionTx,
   loadKeeperDecoder,
 } from "../tx/wasmBuilder";
+import { readLiveConfig, buildOpenTransaction } from "../tx/buildOrderTransaction";
 import {
   aggregateOpenInterest,
   netCollateralImbalance,
   totalCollateral,
 } from "../feed/openInterest";
+import { LanguageSwitcher } from "../i18n/LanguageSwitcher";
+import {
+  CATALOG,
+  baseOf,
+  findSymbol,
+  formatQuote,
+  marketSymbol,
+  tiersFor,
+  type CatalogSymbol,
+} from "../markets/catalog";
+import { useTickers } from "../markets/syntheticTicker";
 import { PriceChart } from "./PriceChart";
+import { MarketBrowser } from "./MarketBrowser";
 import "./trade.css";
 
 interface Props {
@@ -28,7 +41,6 @@ interface Props {
   walletPubkeyHex?: string;
   onConnect: () => void;
   onDisconnect: () => void;
-  /** Configured market symbols (multi-market). Empty in single-market mode. */
   symbols: string[];
   activeSymbol: string | null;
   onSymbolChange: (s: string) => void;
@@ -39,16 +51,26 @@ interface Props {
 const ENVELOPE_HALF_WIDTH_BPS = 50n;
 const BPS_DENOMINATOR = 10_000n;
 
+// Comprehensive timeframe set: minute / hour / day / week / month / year.
 const TIMEFRAMES: { label: string; sec: number }[] = [
-  { label: "5s", sec: 5 },
-  { label: "15s", sec: 15 },
   { label: "1m", sec: 60 },
   { label: "5m", sec: 300 },
+  { label: "15m", sec: 900 },
+  { label: "30m", sec: 1800 },
+  { label: "1h", sec: 3600 },
+  { label: "4h", sec: 14400 },
+  { label: "1D", sec: 86400 },
+  { label: "1W", sec: 604800 },
+  { label: "1M", sec: 2592000 },
+  { label: "1Y", sec: 31536000 },
 ];
 
-function buildEnvelope(feed: FeedSnapshot) {
-  const pNow = BigInt(feed.indexer.market.midPriceMicro);
-  const slot = BigInt(feed.indexer.market.lastOracleSlot);
+const DEFAULT_BASE = "BTC";
+const PREFERRED_DEFAULT_LEVERAGE = 20;
+
+function buildEnvelopeFromUsd(priceUsd: number, slotNum: number) {
+  const pNow = BigInt(Math.max(0, Math.round(priceUsd * 1_000_000)));
+  const slot = BigInt(slotNum);
   const half = (pNow * ENVELOPE_HALF_WIDTH_BPS) / BPS_DENOMINATOR;
   return {
     pNow,
@@ -67,6 +89,13 @@ function nextPositionId(walletHex: string | undefined): bigint {
     folded = folded ^ (byte << BigInt(i * 8));
   }
   return (ts << 32n) | (folded & 0xffff_ffffn);
+}
+
+function compactUsd(v: number): string {
+  if (v >= 1_000_000_000) return `$${(v / 1_000_000_000).toFixed(2)}B`;
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
+  return `$${v.toFixed(0)}`;
 }
 
 interface HistoryRow {
@@ -90,11 +119,72 @@ export function TradeView({
   onHome,
   onConsole,
 }: Props): JSX.Element {
+  const { t } = useTranslation();
   const market = feed.indexer.market;
+
+  // ── catalog-driven market + leverage selection ────────────────────────
+  const liveBase = baseOf(activeSymbol ?? market.symbol);
+  const [selectedBase, setSelectedBase] = useState<string>(() =>
+    findSymbol(liveBase) ? liveBase : DEFAULT_BASE,
+  );
+  const sym: CatalogSymbol = useMemo(
+    () => findSymbol(selectedBase) ?? CATALOG[0]!,
+    [selectedBase],
+  );
+  const tiers = useMemo(() => tiersFor(sym), [sym]);
+  const [leverage, setLeverage] = useState<number>(() =>
+    tiers.includes(PREFERRED_DEFAULT_LEVERAGE)
+      ? PREFERRED_DEFAULT_LEVERAGE
+      : tiers[tiers.length - 1]!,
+  );
+  const [browserOpen, setBrowserOpen] = useState(false);
+
+  // Clamp leverage into the selected underlying's tier ladder.
+  useEffect(() => {
+    if (!tiers.includes(leverage)) {
+      setLeverage(
+        tiers.includes(PREFERRED_DEFAULT_LEVERAGE)
+          ? PREFERRED_DEFAULT_LEVERAGE
+          : tiers[tiers.length - 1]!,
+      );
+    }
+  }, [tiers, leverage]);
+
+  // The on-chain market for the current (base, leverage) selection.
+  const onchainSymbol = marketSymbol(selectedBase, leverage);
+  const isLiveMarket = symbols.includes(onchainSymbol);
+
+  // When the selected market exists on-chain, point the live feed at it so
+  // positions / sub-pools / status follow the selection.
+  useEffect(() => {
+    if (isLiveMarket && activeSymbol !== onchainSymbol) {
+      onSymbolChange(onchainSymbol);
+    }
+  }, [isLiveMarket, onchainSymbol, activeSymbol, onSymbolChange]);
+
+  // Live price override: only when the live feed market shares our base.
+  const livePriceUsd =
+    baseOf(market.symbol) === selectedBase && market.midPriceMicro != null
+      ? Number(market.midPriceMicro) / 1_000_000
+      : null;
+  const liveOverrides = useMemo(() => {
+    const m = new Map<string, number>();
+    if (livePriceUsd != null && livePriceUsd > 0) m.set(selectedBase, livePriceUsd);
+    return m;
+  }, [livePriceUsd, selectedBase]);
+  const tickers = useTickers(liveOverrides);
+  const activeTicker = tickers.get(selectedBase);
+  const priceUsd = activeTicker?.price ?? sym.basePriceUsd;
+  const change24h = activeTicker?.change24hPct ?? 0;
+  const volume24h = activeTicker?.volume24hUsd ?? 0;
+  const priceIsLive = activeTicker?.live ?? false;
+  const up = change24h >= 0;
+
+  // ── order form state ───────────────────────────────────────────────────
   const [side, setSide] = useState<Direction>("Long");
   const [collateral, setCollateral] = useState<number>(1000);
   const [subPoolId, setSubPoolId] = useState<number>(0);
-  const [intervalSec, setIntervalSec] = useState<number>(15);
+  const [intervalSec, setIntervalSec] = useState<number>(60);
   const [bottomTab, setBottomTab] = useState<BottomTab>("positions");
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [wasmReady, setWasmReady] = useState(false);
@@ -110,20 +200,6 @@ export function TradeView({
     };
   }, []);
 
-  const priceUsd = useMemo(
-    () => Number(market.midPriceMicro) / 1_000_000,
-    [market.midPriceMicro],
-  );
-
-  // Session anchor: first price observed this mount → drives % change.
-  const sessionOpenRef = useRef<number | null>(null);
-  if (sessionOpenRef.current == null && Number.isFinite(priceUsd) && priceUsd > 0) {
-    sessionOpenRef.current = priceUsd;
-  }
-  const sessionOpen = sessionOpenRef.current ?? priceUsd;
-  const changePct = sessionOpen > 0 ? ((priceUsd - sessionOpen) / sessionOpen) * 100 : 0;
-  const up = changePct >= 0;
-
   const openInterest = useMemo(
     () => aggregateOpenInterest(feed.positions),
     [feed.positions],
@@ -136,8 +212,10 @@ export function TradeView({
   const skew = netCollateralImbalance(openInterest);
 
   const marketDisabled =
-    market.paused || market.pausedGlobally || market.frozenNewPosition;
+    isLiveMarket &&
+    (market.paused || market.pausedGlobally || market.frozenNewPosition);
   const connected = walletStatus === "connected";
+  const notional = collateral * leverage;
 
   function pushHistory(row: HistoryRow) {
     setHistory((h) => [row, ...h].slice(0, 60));
@@ -151,27 +229,49 @@ export function TradeView({
     if (!wasmReady || marketDisabled || busy) return;
     setBusy(true);
     try {
-      const envelope = buildEnvelope(feed);
-      const positionId = nextPositionId(wallet.pubkey()?.hex);
+      const envelope = buildEnvelopeFromUsd(priceUsd, market.lastOracleSlot);
+      const ownerHex = wallet.pubkey()?.hex;
+      const positionId = nextPositionId(ownerHex);
       const grossAmount = BigInt(Math.max(0, Math.floor(collateral))) * 1_000_000n;
-      const borshBytes = buildOpenPositionTx({
+      const instructionData = buildOpenPositionTx({
         envelope,
         directionIsLong: side === "Long",
         grossAmount,
         positionId,
       });
+
+      // Real wallets get a fully-assembled, submittable transaction
+      // (9 account metas + ATA + PDAs + blockhash). The offline mock
+      // path keeps using raw instruction bytes for the demo signature.
+      const liveCfg = readLiveConfig();
+      let payloadBytes: Uint8Array = instructionData;
+      if (liveCfg && ownerHex && wallet.name !== "mock") {
+        payloadBytes = await buildOpenTransaction({
+          cfg: liveCfg,
+          ownerHex,
+          subPoolId,
+          positionId,
+          instructionData,
+        });
+      }
+
       const sig = await wallet.signAndSubmit({
-        description: `open ${side} sub_pool=${subPoolId} collateral=${collateral} USDC`,
-        borshBytes,
+        description: `open ${side} ${onchainSymbol} sub_pool=${subPoolId} collateral=${collateral} USDC lev=${leverage}x`,
+        borshBytes: payloadBytes,
       });
       pushHistory({
         ts: Date.now(),
         kind: "open",
-        text: `开仓 ${side} · ${collateral} USDC · 子池#${subPoolId} · sig ${formatPubkey(sig)}`,
+        text: t("trade.openLog", {
+          side: side === "Long" ? t("trade.sideLong") : t("trade.sideShort"),
+          amount: collateral,
+          sp: subPoolId,
+          sig: formatPubkey(sig),
+        }) + ` · ${onchainSymbol}`,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      pushHistory({ ts: Date.now(), kind: "error", text: `开仓失败: ${msg}` });
+      pushHistory({ ts: Date.now(), kind: "error", text: t("trade.openFail", { msg }) });
     } finally {
       setBusy(false);
     }
@@ -181,7 +281,7 @@ export function TradeView({
     if (!connected || !wasmReady || busy) return;
     setBusy(true);
     try {
-      const envelope = buildEnvelope(feed);
+      const envelope = buildEnvelopeFromUsd(priceUsd, market.lastOracleSlot);
       const borshBytes = buildClosePositionTx({
         envelope,
         longBucketCount: 0,
@@ -194,91 +294,91 @@ export function TradeView({
       pushHistory({
         ts: Date.now(),
         kind: "close",
-        text: `平仓 ${label} · 子池#${sp} · sig ${formatPubkey(sig)}`,
+        text: t("trade.closeLog", { label, sp, sig: formatPubkey(sig) }),
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      pushHistory({ ts: Date.now(), kind: "error", text: `平仓失败: ${msg}` });
+      pushHistory({ ts: Date.now(), kind: "error", text: t("trade.closeFail", { msg }) });
     } finally {
       setBusy(false);
     }
   }
 
-  const statusLabel = market.pausedGlobally
-    ? "全局暂停"
-    : market.paused
-      ? "市场暂停"
-      : market.frozenNewPosition
-        ? "禁止开仓"
-        : "正常交易";
+  const statusLabel = !isLiveMarket
+    ? t("trade.statusNormal")
+    : market.pausedGlobally
+      ? t("trade.statusGlobalPaused")
+      : market.paused
+        ? t("trade.statusPaused")
+        : market.frozenNewPosition
+          ? t("trade.statusFrozen")
+          : t("trade.statusNormal");
 
   return (
     <div className="tv">
-      {/* Top bar */}
       <header className="tv-top">
         <button type="button" className="tv-brand" onClick={onHome}>
-          <span className="tv-brand-mark" /> MoleOption
+          <span className="tv-brand-mark" /> {t("common.appName")}
         </button>
 
         <div className="tv-market-pick">
-          {symbols.length > 0 ? (
-            <select
-              value={activeSymbol ?? ""}
-              onChange={(e) => onSymbolChange(e.target.value)}
-              className="tv-symbol-select"
-            >
-              {symbols.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span className="tv-symbol-static">{market.symbol}</span>
-          )}
+          <button
+            type="button"
+            className="tv-market-btn"
+            onClick={() => setBrowserOpen(true)}
+          >
+            <span className="tv-market-sym">{selectedBase}-USDC</span>
+            <span className="tv-market-cap">{sym.maxLeverage}x</span>
+            <span className="tv-market-caret">▾</span>
+          </button>
           <span className={`tv-status-chip ${marketDisabled ? "off" : "on"}`}>
             {statusLabel}
           </span>
+          {!isLiveMarket ? (
+            <span className="tv-demo-chip" title={t("trade.demoMarketHint")}>
+              {t("trade.demoMarket")}
+            </span>
+          ) : null}
         </div>
 
         <div className="tv-stats">
           <div className="tv-stat">
-            <span className="tv-stat-label">现价</span>
+            <span className="tv-stat-label">{t("trade.price")}</span>
             <span className={`tv-stat-value tv-price ${up ? "pos" : "neg"}`}>
-              ${formatPriceMicro(market.midPriceMicro)}
+              ${formatQuote(priceUsd, sym)}
+              {priceIsLive ? <em className="tv-live-dot" title="live oracle">●</em> : null}
             </span>
           </div>
           <div className="tv-stat">
-            <span className="tv-stat-label">本场涨跌</span>
+            <span className="tv-stat-label">{t("trade.change")}</span>
             <span className={`tv-stat-value ${up ? "pos" : "neg"}`}>
               {up ? "+" : ""}
-              {changePct.toFixed(2)}%
+              {change24h.toFixed(2)}%
             </span>
           </div>
           <div className="tv-stat">
-            <span className="tv-stat-label">强平价</span>
-            <span className="tv-stat-value tv-none">无</span>
+            <span className="tv-stat-label">{t("trade.volume24h")}</span>
+            <span className="tv-stat-value">{compactUsd(volume24h)}</span>
           </div>
           <div className="tv-stat">
-            <span className="tv-stat-label">预言机 slot</span>
-            <span className="tv-stat-value">
-              {market.lastOracleSlot}
-              <em className="tv-lag"> · lag {market.currentSlot - market.lastOracleSlot}</em>
-            </span>
+            <span className="tv-stat-label">{t("trade.maxLev")}</span>
+            <span className="tv-stat-value">{sym.maxLeverage}x</span>
           </div>
           <div className="tv-stat">
-            <span className="tv-stat-label">未平仓本金</span>
+            <span className="tv-stat-label">{t("trade.openInterest")}</span>
             <span className="tv-stat-value">${formatUsdcMicro(totalCollateral(openInterest))}</span>
           </div>
         </div>
 
         <div className="tv-top-actions">
+          <LanguageSwitcher variant="compact" />
           <button type="button" className="tv-link" onClick={onConsole}>
-            控制台
+            {t("common.dashboard")}
           </button>
           {connected ? (
             <button type="button" className="tv-wallet connected" onClick={onDisconnect}>
-              {walletPubkeyHex ? formatPubkey(walletPubkeyHex) : "已连接"} · 断开
+              {walletPubkeyHex ? formatPubkey(walletPubkeyHex) : t("common.connected")} ·{" "}
+              {t("common.disconnect")}
             </button>
           ) : (
             <button
@@ -287,15 +387,13 @@ export function TradeView({
               onClick={onConnect}
               disabled={walletStatus === "connecting"}
             >
-              {walletStatus === "connecting" ? "连接中…" : "连接钱包"}
+              {walletStatus === "connecting" ? t("common.connecting") : t("common.connectWallet")}
             </button>
           )}
         </div>
       </header>
 
-      {/* Main grid */}
       <div className="tv-main">
-        {/* Left: chart + bottom tabs */}
         <div className="tv-left">
           <div className="tv-chart-card">
             <div className="tv-chart-head">
@@ -311,12 +409,12 @@ export function TradeView({
                   </button>
                 ))}
               </div>
-              <span className="tv-chart-note">价格源 · 预言机逐块喂价(devnet)</span>
+              <span className="tv-chart-note">{t("trade.chartNote")}</span>
             </div>
             <PriceChart
               priceUsd={Number.isFinite(priceUsd) ? priceUsd : null}
               intervalSec={intervalSec}
-              symbol={market.symbol}
+              symbol={onchainSymbol}
             />
           </div>
 
@@ -327,14 +425,14 @@ export function TradeView({
                 className={bottomTab === "positions" ? "active" : ""}
                 onClick={() => setBottomTab("positions")}
               >
-                持仓 ({feed.positions.length})
+                {t("trade.positions")} ({feed.positions.length})
               </button>
               <button
                 type="button"
                 className={bottomTab === "history" ? "active" : ""}
                 onClick={() => setBottomTab("history")}
               >
-                交易历史 ({history.length})
+                {t("trade.history")} ({history.length})
               </button>
             </div>
 
@@ -343,26 +441,26 @@ export function TradeView({
                 <table className="tv-table">
                   <thead>
                     <tr>
-                      <th>方向</th>
-                      <th>账户</th>
-                      <th>子池</th>
-                      <th>数量</th>
-                      <th>保证金</th>
-                      <th>最大亏损</th>
-                      <th>开仓时间</th>
+                      <th>{t("trade.colSide")}</th>
+                      <th>{t("trade.colAccount")}</th>
+                      <th>{t("trade.colSubPool")}</th>
+                      <th>{t("trade.colQty")}</th>
+                      <th>{t("trade.colMargin")}</th>
+                      <th>{t("trade.colMaxLoss")}</th>
+                      <th>{t("trade.colOpened")}</th>
                       <th />
                     </tr>
                   </thead>
                   <tbody>
                     {feed.positions.length === 0 ? (
                       <tr className="tv-empty-row">
-                        <td colSpan={8}>暂无持仓 — 在右侧开出你的第一笔仓位</td>
+                        <td colSpan={8}>{t("trade.noPositions")}</td>
                       </tr>
                     ) : (
                       feed.positions.map((p, i) => (
                         <tr key={`${p.owner.hex}-${i}`}>
                           <td className={p.direction === "Long" ? "pos" : "neg"}>
-                            {p.direction === "Long" ? "做多" : "做空"}
+                            {p.direction === "Long" ? t("trade.sideLong") : t("trade.sideShort")}
                           </td>
                           <td className="tv-mono">{formatPubkey(p.owner.hex)}</td>
                           <td>#{p.subPoolId}</td>
@@ -384,7 +482,7 @@ export function TradeView({
                                 )
                               }
                             >
-                              平仓
+                              {t("trade.close")}
                             </button>
                           </td>
                         </tr>
@@ -396,7 +494,7 @@ export function TradeView({
             ) : (
               <div className="tv-table-scroll">
                 {history.length === 0 ? (
-                  <div className="tv-history-empty">本会话尚无交易记录。</div>
+                  <div className="tv-history-empty">{t("trade.noHistory")}</div>
                 ) : (
                   <ul className="tv-history">
                     {history.map((h, i) => (
@@ -414,19 +512,18 @@ export function TradeView({
           </div>
         </div>
 
-        {/* Middle: pool depth / long-short skew */}
         <div className="tv-depth">
-          <div className="tv-depth-head">多空力量 · 子池盘口</div>
+          <div className="tv-depth-head">{t("trade.depthTitle")}</div>
           <div className="tv-depth-bars">
             <div className="tv-depth-row">
-              <span className="tv-depth-side pos">做多</span>
+              <span className="tv-depth-side pos">{t("trade.depthLong")}</span>
               <div className="tv-depth-track">
                 <div className="tv-depth-fill pos" style={{ width: `${longPct}%` }} />
               </div>
               <span className="tv-depth-val">{longPct.toFixed(1)}%</span>
             </div>
             <div className="tv-depth-row">
-              <span className="tv-depth-side neg">做空</span>
+              <span className="tv-depth-side neg">{t("trade.depthShort")}</span>
               <div className="tv-depth-track">
                 <div className="tv-depth-fill neg" style={{ width: `${shortPct}%` }} />
               </div>
@@ -435,26 +532,23 @@ export function TradeView({
           </div>
 
           <div className="tv-depth-kv">
-            <Row label="多头本金" value={`$${longUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })}`} cls="pos" />
-            <Row label="空头本金" value={`$${shortUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })}`} cls="neg" />
+            <Row label={t("trade.longPrincipal")} value={`$${longUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })}`} cls="pos" />
+            <Row label={t("trade.shortPrincipal")} value={`$${shortUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })}`} cls="neg" />
             <Row
-              label="净偏斜"
+              label={t("trade.netSkew")}
               value={`${skew >= 0n ? "+" : "−"}$${formatUsdcMicro(skew >= 0n ? skew : -skew)}`}
             />
-            <Row label="多头仓位" value={`${openInterest.longCount}`} />
-            <Row label="空头仓位" value={`${openInterest.shortCount}`} />
+            <Row label={t("trade.longPos")} value={`${openInterest.longCount}`} />
+            <Row label={t("trade.shortPos")} value={`${openInterest.shortCount}`} />
             <Row
-              label="待兑付 recovery"
+              label={t("trade.pendingRecovery")}
               value={`$${formatUsdcMicro(feed.indexer.projectedRecoveryOutstandingMicroUsdc)}`}
             />
           </div>
 
-          <div className="tv-depth-note">
-            盈利来自对手盘亏损——此处展示当前多空本金分布与净偏斜，替代传统订单簿。
-          </div>
+          <div className="tv-depth-note">{t("trade.depthNote")}</div>
         </div>
 
-        {/* Right: order form */}
         <aside className="tv-order">
           <div className="tv-side-toggle">
             <button
@@ -462,24 +556,46 @@ export function TradeView({
               className={`buy ${side === "Long" ? "active" : ""}`}
               onClick={() => setSide("Long")}
             >
-              做多 / Long
+              {t("trade.longBtn")} / Long
             </button>
             <button
               type="button"
               className={`sell ${side === "Short" ? "active" : ""}`}
               onClick={() => setSide("Short")}
             >
-              做空 / Short
+              {t("trade.shortBtn")} / Short
             </button>
           </div>
 
+          <div className="tv-lev">
+            <div className="tv-lev-head">
+              <span>{t("trade.leverage")}</span>
+              <span className="tv-lev-current">{leverage}x</span>
+            </div>
+            <div className="tv-lev-tiers">
+              {tiers.map((lv) => (
+                <button
+                  key={lv}
+                  type="button"
+                  className={leverage === lv ? "active" : ""}
+                  onClick={() => setLeverage(lv)}
+                >
+                  {lv}x
+                </button>
+              ))}
+            </div>
+            <span className="tv-lev-cap">
+              {t("trade.maxLevHint", { cls: t(`market.class.${sym.assetClass}`), max: sym.maxLeverage })}
+            </span>
+          </div>
+
           <div className="tv-order-type">
-            <span className="active">市价单</span>
-            <span className="tv-order-type-note">按预言机价格逐块结算</span>
+            <span className="active">{t("trade.marketOrder")}</span>
+            <span className="tv-order-type-note">{t("trade.marketOrderNote")}</span>
           </div>
 
           <label className="tv-field">
-            <span>保证金 (USDC)</span>
+            <span>{t("trade.margin")}</span>
             <div className="tv-input-wrap">
               <input
                 type="number"
@@ -500,7 +616,7 @@ export function TradeView({
           </div>
 
           <label className="tv-field">
-            <span>子池</span>
+            <span>{t("trade.subPool")}</span>
             <select
               value={subPoolId}
               onChange={(e) => setSubPoolId(parseInt(e.target.value, 10))}
@@ -518,14 +634,23 @@ export function TradeView({
           </label>
 
           <div className="tv-order-summary">
-            <Row label="预计开仓价" value={`$${formatPriceMicro(market.midPriceMicro)}`} />
+            <Row label={t("trade.estEntry")} value={`$${formatQuote(priceUsd, sym)}`} />
+            <Row label={t("trade.leverage")} value={`${leverage}x`} />
             <Row
-              label="价格封套"
+              label={t("trade.notional")}
+              value={`$${notional.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
+            />
+            <Row
+              label={t("trade.priceEnvelope")}
               value={`±${(Number(ENVELOPE_HALF_WIDTH_BPS) / 100).toFixed(2)}%`}
             />
-            <Row label="开仓费" value="0.05%" />
-            <Row label="最大亏损" value={`${collateral.toLocaleString()} USDC + 费`} cls="warn" />
-            <Row label="强平价格" value="无 · None" cls="pos" />
+            <Row label={t("trade.openFee")} value="0.05%" />
+            <Row
+              label={t("trade.maxLoss")}
+              value={t("trade.maxLossVal", { amount: collateral.toLocaleString() })}
+              cls="warn"
+            />
+            <Row label={t("trade.liq")} value={t("common.none")} cls="pos" />
           </div>
 
           <button
@@ -535,23 +660,30 @@ export function TradeView({
             onClick={() => void submitOpen()}
           >
             {marketDisabled
-              ? "市场暂停"
+              ? t("trade.submitPaused")
               : !connected
-                ? "连接钱包"
+                ? t("trade.submitConnect")
                 : !wasmReady
-                  ? "编码器加载中…"
+                  ? t("trade.submitLoading")
                   : busy
-                    ? "提交中…"
+                    ? t("trade.submitBusy")
                     : side === "Long"
-                      ? `做多 ${market.symbol}`
-                      : `做空 ${market.symbol}`}
+                      ? t("trade.goLong", { symbol: `${selectedBase} ${leverage}x` })
+                      : t("trade.goShort", { symbol: `${selectedBase} ${leverage}x` })}
           </button>
 
-          <p className="tv-order-disclaimer">
-            "永不爆仓"指仓位不会被强平，最大亏损为本金加费用。盈利兑现取决于对手盘亏损。
-          </p>
+          <p className="tv-order-disclaimer">{t("trade.orderDisclaimer")}</p>
         </aside>
       </div>
+
+      {browserOpen ? (
+        <MarketBrowser
+          activeBase={selectedBase}
+          tickers={tickers}
+          onSelect={setSelectedBase}
+          onClose={() => setBrowserOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

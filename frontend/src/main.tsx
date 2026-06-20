@@ -1,14 +1,10 @@
+import "./polyfills";
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { Buffer } from "buffer";
+import { BrowserRouter } from "react-router-dom";
 import { App } from "./App";
+import "./i18n";
 import "./styles.css";
-
-// The frontend reuses Solana / Borsh helpers that expect Node's Buffer.
-// Vite no longer injects it automatically, so expose the browser polyfill once.
-if (typeof globalThis.Buffer === "undefined") {
-  globalThis.Buffer = Buffer;
-}
 
 const rootEl = document.getElementById("root");
 if (!rootEl) {
@@ -17,6 +13,8 @@ if (!rootEl) {
 
 ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
-    <App />
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
   </React.StrictMode>
 );

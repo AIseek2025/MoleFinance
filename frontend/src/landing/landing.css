@@ -120,6 +120,12 @@
 .lp-link-btn:hover {
   color: var(--lp-text);
 }
+.lp-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .lp-cta-sm {
   padding: 9px 18px;
   border-radius: 10px;

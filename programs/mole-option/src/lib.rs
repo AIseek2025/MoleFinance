@@ -91,6 +91,13 @@ pub mod mole_option {
         instructions::initialize_market(ctx, params)
     }
 
+    /// Create the market's SPL token vaults (vault + fee_vault) as PDAs.
+    /// Must be called once after `initialize_market` before any
+    /// `open_position` can settle collateral.
+    pub fn initialize_market_vaults(ctx: Context<InitializeMarketVaults>) -> Result<()> {
+        instructions::initialize_market_vaults(ctx)
+    }
+
     /// Create a new sub-pool inside a market.
     pub fn initialize_sub_pool(
         ctx: Context<InitializeSubPool>,

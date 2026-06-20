@@ -1,0 +1,41 @@
+{
+  "$comment": "Single source of truth for the tradable market catalog. Consumed by the frontend (catalog.ts) AND the devnet bootstrap (scripts/keeper-devnet.mjs reads it via fs). Each leverage tier is an INDEPENDENT on-chain Market keyed by `${base}-${lev}X` (<=16 ASCII bytes, fits Market.symbol [u8;16]). Per asset-class leverage caps: crypto 100x, equity/metals/commodities 200x, fx 500x.",
+  "leverageTiers": [5, 10, 20, 50, 100, 200, 500],
+  "assetClasses": {
+    "crypto": { "maxLeverage": 100, "category": "Crypto" },
+    "equity": { "maxLeverage": 200, "category": "Tradfi" },
+    "fx": { "maxLeverage": 500, "category": "FX" }
+  },
+  "symbols": [
+    { "base": "BTC", "name": "Bitcoin", "class": "crypto", "basePriceUsd": 63704, "quoteDecimals": 2 },
+    { "base": "ETH", "name": "Ethereum", "class": "crypto", "basePriceUsd": 1728.6, "quoteDecimals": 2 },
+    { "base": "SOL", "name": "Solana", "class": "crypto", "basePriceUsd": 150.0, "quoteDecimals": 3 },
+    { "base": "HYPE", "name": "Hyperliquid", "class": "crypto", "basePriceUsd": 71.24, "quoteDecimals": 3 },
+    { "base": "ZEC", "name": "Zcash", "class": "crypto", "basePriceUsd": 471.48, "quoteDecimals": 2 },
+    { "base": "BNB", "name": "BNB", "class": "crypto", "basePriceUsd": 605.0, "quoteDecimals": 2 },
+    { "base": "XRP", "name": "XRP", "class": "crypto", "basePriceUsd": 0.62, "quoteDecimals": 4 },
+    { "base": "DOGE", "name": "Dogecoin", "class": "crypto", "basePriceUsd": 0.162, "quoteDecimals": 5 },
+    { "base": "AVAX", "name": "Avalanche", "class": "crypto", "basePriceUsd": 38.4, "quoteDecimals": 3 },
+    { "base": "LINK", "name": "Chainlink", "class": "crypto", "basePriceUsd": 18.2, "quoteDecimals": 3 },
+    { "base": "SUI", "name": "Sui", "class": "crypto", "basePriceUsd": 4.25, "quoteDecimals": 4 },
+    { "base": "APT", "name": "Aptos", "class": "crypto", "basePriceUsd": 11.3, "quoteDecimals": 4 },
+    { "base": "LTC", "name": "Litecoin", "class": "crypto", "basePriceUsd": 88.5, "quoteDecimals": 3 },
+    { "base": "ARB", "name": "Arbitrum", "class": "crypto", "basePriceUsd": 1.12, "quoteDecimals": 4 },
+    { "base": "OP", "name": "Optimism", "class": "crypto", "basePriceUsd": 2.35, "quoteDecimals": 4 },
+    { "base": "SP500", "name": "S&P 500 Index", "class": "equity", "basePriceUsd": 7497.0, "quoteDecimals": 2 },
+    { "base": "NAS100", "name": "Nasdaq 100 Index", "class": "equity", "basePriceUsd": 20650.0, "quoteDecimals": 2 },
+    { "base": "NVDA", "name": "NVIDIA", "class": "equity", "basePriceUsd": 125.4, "quoteDecimals": 2 },
+    { "base": "TSLA", "name": "Tesla", "class": "equity", "basePriceUsd": 250.2, "quoteDecimals": 2 },
+    { "base": "AAPL", "name": "Apple", "class": "equity", "basePriceUsd": 230.1, "quoteDecimals": 2 },
+    { "base": "SKHYNIX", "name": "SK Hynix", "class": "equity", "basePriceUsd": 1882.2, "quoteDecimals": 2 },
+    { "base": "SPCX", "name": "SpaceX (pre-IPO)", "class": "equity", "basePriceUsd": 180.5, "quoteDecimals": 2 },
+    { "base": "WTI", "name": "WTI Crude Oil", "class": "equity", "basePriceUsd": 76.98, "quoteDecimals": 2 },
+    { "base": "GOLD", "name": "Gold (XAU)", "class": "equity", "basePriceUsd": 2350.5, "quoteDecimals": 2 },
+    { "base": "SILVER", "name": "Silver (XAG)", "class": "equity", "basePriceUsd": 30.45, "quoteDecimals": 3 },
+    { "base": "EURUSD", "name": "Euro / US Dollar", "class": "fx", "basePriceUsd": 1.0852, "quoteDecimals": 5 },
+    { "base": "GBPUSD", "name": "Pound / US Dollar", "class": "fx", "basePriceUsd": 1.271, "quoteDecimals": 5 },
+    { "base": "USDJPY", "name": "US Dollar / Yen", "class": "fx", "basePriceUsd": 157.25, "quoteDecimals": 3 },
+    { "base": "AUDUSD", "name": "Aussie / US Dollar", "class": "fx", "basePriceUsd": 0.662, "quoteDecimals": 5 },
+    { "base": "USDCAD", "name": "US Dollar / Loonie", "class": "fx", "basePriceUsd": 1.3705, "quoteDecimals": 5 }
+  ]
+}

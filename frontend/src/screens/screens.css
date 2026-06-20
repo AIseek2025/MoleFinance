@@ -1,0 +1,248 @@
+/*
+ * Shared chrome for the Dashboard (/dashboard) and Admin (/admin)
+ * screens: a consistent header, page container, titles, tabs, and the
+ * admin login card. Prefixed `sc-` to avoid colliding with panel styles.
+ */
+
+.sc-page {
+  min-height: 100vh;
+  background: var(--bg, #0b0d11);
+  color: var(--text, #e2e7ef);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.sc-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  height: 60px;
+  padding: 0 22px;
+  border-bottom: 1px solid var(--border, #2a3340);
+  background: var(--panel, #14181f);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.sc-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--text, #e2e7ef);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+.sc-brand-mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #5dd6c2, #7c8cff);
+  box-shadow: 0 0 14px rgba(93, 214, 194, 0.5);
+}
+.sc-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+.sc-nav-link {
+  background: none;
+  border: none;
+  color: var(--text-dim, #8a96a8);
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 7px 12px;
+  border-radius: 8px;
+}
+button.sc-nav-link:hover {
+  color: var(--text, #e2e7ef);
+  background: rgba(255, 255, 255, 0.04);
+}
+.sc-nav-link.active {
+  color: var(--text, #e2e7ef);
+  background: rgba(93, 214, 194, 0.12);
+  cursor: default;
+}
+.sc-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sc-wallet {
+  padding: 9px 16px;
+  border-radius: 9px;
+  border: none;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  color: #04130f;
+  background: linear-gradient(135deg, #5dd6c2, #7ee8d6);
+  font-family: inherit;
+}
+.sc-wallet:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.sc-wallet.connected {
+  color: var(--text, #e2e7ef);
+  background: var(--card, #1b212b);
+  border: 1px solid var(--border, #2a3340);
+}
+
+/* Language switcher */
+.lang-switcher {
+  background: var(--card, #1b212b);
+  color: var(--text, #e2e7ef);
+  border: 1px solid var(--border, #2a3340);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.lang-switcher.lang-compact {
+  padding: 7px 8px;
+  font-size: 12px;
+}
+
+/* Page body */
+.sc-main {
+  flex: 1;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 26px 24px 60px;
+}
+.sc-title-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+.sc-title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  margin: 0;
+}
+.sc-subtitle {
+  margin: 6px 0 0;
+  color: var(--text-dim, #8a96a8);
+  font-size: 14px;
+}
+.sc-loading {
+  padding: 80px 0;
+  text-align: center;
+  color: var(--text-dim, #8a96a8);
+}
+
+/* Admin tabs */
+.sc-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 18px 0;
+  border-bottom: 1px solid var(--border, #2a3340);
+}
+.sc-tabs button {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim, #8a96a8);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.sc-tabs button.active {
+  color: var(--text, #e2e7ef);
+  border-bottom-color: #5dd6c2;
+}
+.sc-panel-host {
+  margin-top: 12px;
+}
+
+/* Admin login */
+.sc-login-page {
+  align-items: center;
+  justify-content: center;
+}
+.sc-login {
+  width: 100%;
+  max-width: 380px;
+  margin: auto;
+  padding: 36px 32px;
+  border-radius: 18px;
+  border: 1px solid var(--border, #2a3340);
+  background: var(--panel, #14181f);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+.sc-login-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 18px;
+}
+.sc-login h1 {
+  font-size: 22px;
+  margin: 10px 0 0;
+}
+.sc-login-sub {
+  margin: 0 0 6px;
+  color: var(--text-dim, #8a96a8);
+  font-size: 13px;
+}
+.sc-login label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-dim, #8a96a8);
+}
+.sc-login input {
+  background: var(--card, #1b212b);
+  border: 1px solid var(--border, #2a3340);
+  border-radius: 9px;
+  padding: 11px 12px;
+  color: var(--text, #e2e7ef);
+  font-size: 15px;
+  font-family: inherit;
+}
+.sc-login input:focus {
+  outline: none;
+  border-color: #5dd6c2;
+}
+.sc-login-error {
+  color: #ff5d6d;
+  font-size: 13px;
+}
+.sc-login-btn {
+  margin-top: 6px;
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  color: #04130f;
+  background: linear-gradient(135deg, #5dd6c2, #7ee8d6);
+  font-family: inherit;
+}
+.sc-login-back {
+  background: none;
+  border: none;
+  color: var(--text-dim, #8a96a8);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+}

@@ -4,6 +4,7 @@
 //! deployer per `Docs/Planning/16-合约升级与治理紧急响应.md`.
 
 use anchor_lang::prelude::*;
+use anchor_spl::token::{Mint, Token, TokenAccount};
 
 use crate::state::*;
 
@@ -149,6 +150,77 @@ pub fn initialize_market(
     m.max_distribution_ledger_size = params.max_distribution_ledger_size;
     m.bump = ctx.bumps.market;
     m._pad = [0u8; 2];
+    Ok(())
+}
+
+/// Create the market's two SPL token vaults as PDAs.
+///
+/// `initialize_market` only *records* the `vault` / `fee_vault` addresses;
+/// the token accounts themselves must be created here because a PDA token
+/// account can only be initialised by a program CPI (no external keypair
+/// exists for a PDA). Both vaults are owned by the `market_vault_authority`
+/// PDA so the program can sign withdrawals on close / claim / harvest.
+///
+/// Idempotency: `init` fails if the vaults already exist, so callers
+/// should only invoke this once per market (right after
+/// `initialize_market`).
+#[derive(Accounts)]
+pub struct InitializeMarketVaults<'info> {
+    #[account(has_one = collateral_mint, has_one = global_config)]
+    pub market: Account<'info, Market>,
+
+    #[account(address = market.global_config)]
+    pub global_config: Account<'info, GlobalConfig>,
+
+    pub collateral_mint: Account<'info, Mint>,
+
+    /// CHECK: PDA that owns both vaults; only used as the token authority,
+    /// never deserialised or signed here.
+    #[account(seeds = [b"market_vault_authority", market.key().as_ref()], bump)]
+    pub vault_authority: AccountInfo<'info>,
+
+    #[account(
+        init,
+        payer = admin,
+        seeds = [b"vault", market.key().as_ref()],
+        bump,
+        token::mint = collateral_mint,
+        token::authority = vault_authority,
+    )]
+    pub vault: Account<'info, TokenAccount>,
+
+    #[account(
+        init,
+        payer = admin,
+        seeds = [b"fee_vault", market.key().as_ref()],
+        bump,
+        token::mint = collateral_mint,
+        token::authority = vault_authority,
+    )]
+    pub fee_vault: Account<'info, TokenAccount>,
+
+    #[account(mut, address = global_config.admin_authority)]
+    pub admin: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+pub fn initialize_market_vaults(ctx: Context<InitializeMarketVaults>) -> Result<()> {
+    // The vaults were recorded by `initialize_market` using the same PDA
+    // seeds; assert the freshly-created token accounts match so a market
+    // can never end up pointing at vaults it does not control.
+    require_keys_eq!(
+        ctx.accounts.vault.key(),
+        ctx.accounts.market.vault,
+        crate::error::ProgramError::InvalidParameter
+    );
+    require_keys_eq!(
+        ctx.accounts.fee_vault.key(),
+        ctx.accounts.market.fee_vault,
+        crate::error::ProgramError::InvalidParameter
+    );
     Ok(())
 }
 
