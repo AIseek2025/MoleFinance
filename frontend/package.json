@@ -11,6 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "keeper:setup": "node scripts/keeper-devnet.mjs setup",
+    "keeper": "node scripts/keeper-devnet.mjs run",
     "wasm-build": "cd .. && wasm-pack build crates/keeper-decoder --target web --features wasm"
   },
   "dependencies": {

@@ -42,11 +42,16 @@ use crate::types::Direction;
 
 /// On-chain representation of a single [`DormantBucket`].
 ///
-/// Total size: **96 bytes** (88 bytes of data + 8 bytes of trailing
-/// padding inserted by Rust to satisfy the 16-byte alignment of the
-/// `u128` fields). The Anchor program stores one of these (plus the
-/// standard 8-byte account discriminator and `bump` byte) inside each
-/// `DormantBucket` PDA. Layout asserted at compile time below.
+/// In-memory size is **target-dependent**: on hosts where `u128` is
+/// 16-byte aligned (aarch64 / x86_64) Rust inserts 8 bytes of internal
+/// padding before the first `u128`, giving **96 bytes**; on the
+/// SBF/BPF target `u128` is 8-byte aligned, so there is no padding and
+/// the struct is **88 bytes**. This is incidental: the type is never
+/// reinterpreted as raw bytes — the Anchor program stores its data in
+/// the borsh-serialised `DormantBucket` account (own hand-computed
+/// `LEN`), and `pack`/`unpack` move field-by-field. The compile-time
+/// assertion below is an alignment-aware regression guard against
+/// accidental field churn, correct on both targets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
 pub struct OnChainBucketRecord {
@@ -73,7 +78,13 @@ pub struct OnChainBucketRecord {
     pub last_applied_index: u64,
 }
 
-const _: [(); 96] = [(); core::mem::size_of::<OnChainBucketRecord>()];
+/// Expected in-memory size of [`OnChainBucketRecord`], accounting for
+/// the target's `u128` alignment (16 → 96 bytes with internal padding,
+/// 8 → 88 bytes without). See the type doc for why this is incidental.
+pub(crate) const ONCHAIN_BUCKET_RECORD_SIZE: usize =
+    if core::mem::align_of::<u128>() == 16 { 96 } else { 88 };
+
+const _: [(); ONCHAIN_BUCKET_RECORD_SIZE] = [(); core::mem::size_of::<OnChainBucketRecord>()];
 
 impl OnChainBucketRecord {
     /// **Wave 8 — single source of truth for "dead PDA" detection.**
@@ -397,8 +408,12 @@ mod size_tests {
     use super::*;
 
     #[test]
-    fn bucket_record_is_96_bytes() {
-        assert_eq!(core::mem::size_of::<OnChainBucketRecord>(), 96);
+    fn bucket_record_size_matches_target_alignment() {
+        // 96 on hosts with 16-byte-aligned u128, 88 on the SBF target.
+        assert_eq!(
+            core::mem::size_of::<OnChainBucketRecord>(),
+            ONCHAIN_BUCKET_RECORD_SIZE
+        );
     }
 
     #[test]

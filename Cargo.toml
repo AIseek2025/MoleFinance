@@ -17,6 +17,7 @@ members = [
 ]
 exclude = [
     "programs/mole-option",
+    "programs/mock-oracle",
 ]
 
 [workspace.package]

@@ -154,6 +154,21 @@ pub fn sync_pool(
         return Err(ClearingError::PriceProtectionFailed);
     }
 
+    // First-price seeding. A pristine sub-pool initialises with
+    // `last_price == 0`; because you cannot open a position without
+    // first running `sync_pool` (which seeds the price), `last_price ==
+    // 0` is equivalent to "no equity, no shares, no dormant state" — so
+    // there is nothing to distribute. Record the first oracle price and
+    // return. Without this branch `price_move_bps(0, p_now)` divides by
+    // the zero `last_price` and EVERY market's very first sync / first
+    // open would fail with `DivByZero`, making fresh pools unusable.
+    if sub_pool.last_price == 0 {
+        sub_pool.last_price = envelope.p_now;
+        sub_pool.last_sync_slot = envelope.slot;
+        check_subpool_invariants(sub_pool)?;
+        return Ok(SyncOutcome::default());
+    }
+
     if envelope.p_now == sub_pool.last_price {
         sub_pool.last_sync_slot = envelope.slot;
         check_subpool_invariants(sub_pool)?;

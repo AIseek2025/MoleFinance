@@ -1,0 +1,18 @@
+[package]
+name = "mock-oracle"
+version = "0.1.0"
+edition = "2021"
+description = "Devnet-only mock Pythnet-v2 SOL/USD oracle. NOT for mainnet."
+publish = false
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "mock_oracle"
+
+[dependencies]
+solana-program = "2.1"
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1

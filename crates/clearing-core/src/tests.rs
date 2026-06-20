@@ -48,6 +48,44 @@ fn envelope(p: u64, slot: u64) -> PriceEnvelope {
 }
 
 #[test]
+fn fresh_pool_first_sync_seeds_price() {
+    // A pristine pool starts at last_price == 0. The first sync must
+    // seed the price instead of dividing by zero in the move check.
+    let market = MarketParams::sample();
+    let mut sub_pool = SubPool::new(0, 0, 0);
+    assert_eq!(sub_pool.last_price, 0);
+
+    let seed = 100 * PRICE_SCALE;
+    let out = crate::engine::sync_pool(&market, &mut sub_pool, envelope(seed, 7)).unwrap();
+    assert_eq!(sub_pool.last_price, seed, "first sync should seed last_price");
+    assert_eq!(sub_pool.last_sync_slot, 7);
+    assert!(out.events.is_empty(), "seeding sync has nothing to distribute");
+
+    // A subsequent in-band move is now subject to the normal move check.
+    let next = seed + seed / 100; // +1%
+    crate::engine::sync_pool(&market, &mut sub_pool, envelope(next, 8)).unwrap();
+    assert_eq!(sub_pool.last_price, next);
+}
+
+#[test]
+fn fresh_pool_first_open_succeeds() {
+    // The very first open on a market routes through sync_pool; without
+    // the seeding branch this would fail with DivByZero.
+    let market = MarketParams::sample();
+    let mut sub_pool = SubPool::new(0, 0, 0);
+    let entry = 100 * PRICE_SCALE;
+    let (_pos, _open) = open_position(
+        &market,
+        &mut sub_pool,
+        envelope(entry, 1),
+        Direction::Long,
+        100_000_000u64,
+    )
+    .expect("first open on a fresh pool should succeed");
+    assert_eq!(sub_pool.last_price, entry);
+}
+
+#[test]
 fn open_close_round_trip_zero_pnl() {
     let market = MarketParams::sample();
     let entry = 100 * PRICE_SCALE;

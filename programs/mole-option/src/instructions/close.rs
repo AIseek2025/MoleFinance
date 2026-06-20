@@ -32,40 +32,44 @@ use super::{validate_oracle_envelope, PriceEnvelopeArgs};
 
 #[derive(Accounts)]
 pub struct ClosePosition<'info> {
+    // Heavy account-data structs are `Box`ed so Anchor's generated
+    // `try_accounts` deserialises them onto the heap instead of the
+    // 4 KB BPF stack frame (otherwise this instruction overflows the
+    // stack — undefined behaviour on chain).
     #[account(mut)]
-    pub market: Account<'info, Market>,
+    pub market: Box<Account<'info, Market>>,
     #[account(mut, has_one = market)]
-    pub sub_pool: Account<'info, SubPoolAccount>,
+    pub sub_pool: Box<Account<'info, SubPoolAccount>>,
     #[account(
         mut,
         has_one = owner,
         has_one = market,
         constraint = position.sub_pool == sub_pool.key(),
     )]
-    pub position: Account<'info, Position>,
+    pub position: Box<Account<'info, Position>>,
     #[account(
         mut,
         has_one = sub_pool,
         constraint = long_ledger.direction_is_long
             @ ProgramError::DormantBridgeAccountMismatch,
     )]
-    pub long_ledger: Account<'info, DistributionLedger>,
+    pub long_ledger: Box<Account<'info, DistributionLedger>>,
     #[account(
         mut,
         has_one = sub_pool,
         constraint = !short_ledger.direction_is_long
             @ ProgramError::DormantBridgeAccountMismatch,
     )]
-    pub short_ledger: Account<'info, DistributionLedger>,
+    pub short_ledger: Box<Account<'info, DistributionLedger>>,
     /// CHECK: oracle feed; validated against `market.oracle_price_feed`
     /// and `market.oracle_program_id` inside the handler.
     #[account(address = market.oracle_price_feed)]
     pub oracle_price_feed: AccountInfo<'info>,
     pub clock: Sysvar<'info, Clock>,
     #[account(mut, address = market.vault)]
-    pub vault: Account<'info, TokenAccount>,
+    pub vault: Box<Account<'info, TokenAccount>>,
     #[account(mut, token::mint = market.collateral_mint, token::authority = owner)]
-    pub user_token_account: Account<'info, TokenAccount>,
+    pub user_token_account: Box<Account<'info, TokenAccount>>,
     /// CHECK: market vault PDA signer.
     #[account(seeds = [b"market_vault_authority", market.key().as_ref()], bump)]
     pub vault_authority: AccountInfo<'info>,

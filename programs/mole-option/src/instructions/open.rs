@@ -22,10 +22,14 @@ pub struct OpenParams {
 #[derive(Accounts)]
 #[instruction(params: OpenParams)]
 pub struct OpenPosition<'info> {
+    // Heavy account-data structs are `Box`ed so Anchor's generated
+    // `try_accounts` deserialises them onto the heap instead of the
+    // 4 KB BPF stack frame (otherwise this instruction overflows the
+    // stack — undefined behaviour on chain).
     #[account(mut)]
-    pub market: Account<'info, Market>,
+    pub market: Box<Account<'info, Market>>,
     #[account(mut, has_one = market)]
-    pub sub_pool: Account<'info, SubPoolAccount>,
+    pub sub_pool: Box<Account<'info, SubPoolAccount>>,
     #[account(
         init,
         payer = owner,
@@ -38,16 +42,16 @@ pub struct OpenPosition<'info> {
         ],
         bump,
     )]
-    pub position: Account<'info, Position>,
+    pub position: Box<Account<'info, Position>>,
 
     /// CHECK: PDA validated by has_one against `market`.
     #[account(mut, address = market.vault)]
-    pub vault: Account<'info, TokenAccount>,
+    pub vault: Box<Account<'info, TokenAccount>>,
     /// CHECK: PDA validated against `market.fee_vault`.
     #[account(mut, address = market.fee_vault)]
-    pub fee_vault: Account<'info, TokenAccount>,
+    pub fee_vault: Box<Account<'info, TokenAccount>>,
     #[account(mut, token::mint = market.collateral_mint, token::authority = owner)]
-    pub user_token_account: Account<'info, TokenAccount>,
+    pub user_token_account: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
     pub owner: Signer<'info>,

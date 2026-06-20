@@ -7,5 +7,11 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    fs: {
+      // The wasm decoder lives at ../crates/keeper-decoder/pkg (outside the
+      // frontend root). Live mode (`?feed=live`) imports its .wasm at runtime,
+      // so the dev server must be allowed to serve files from the repo root.
+      allow: [".."],
+    },
   },
 });
