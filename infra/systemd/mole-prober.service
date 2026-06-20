@@ -1,0 +1,15 @@
+[Unit]
+Description=Mole devnet prober
+After=network.target
+
+[Service]
+Type=simple
+User=admin
+WorkingDirectory=/var/www/molefinance/repo
+EnvironmentFile=-/etc/mole/mole-prober.env
+ExecStart=/var/www/molefinance/repo/target/release/ops-toolkit prober /etc/mole/markets.toml /var/lib/mole/prober.prom /var/lib/mole/prober.json 10 0
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -79,6 +79,10 @@ export interface ProgramAccountChangeCallback {
 }
 
 export interface FeedConnection {
+  getAccountInfo?(
+    pubkey: PublicKey,
+    commitment?: Commitment,
+  ): Promise<AccountInfo<Buffer> | null>;
   onAccountChange(
     pubkey: PublicKey,
     cb: AccountChangeCallback,
@@ -299,6 +303,32 @@ export class WebSocketFeedAdapter implements FeedAdapter {
         (info) => this.handleLeaderLockChange(info, onSnapshot),
         this.opts.commitment,
       );
+    }
+    if (typeof connection.getAccountInfo === "function") {
+      void connection
+        .getAccountInfo(this.opts.marketPda, this.opts.commitment)
+        .then((info) => {
+          if (info) this.handleAccountChange(info, onSnapshot);
+        })
+        .catch((e) => {
+          console.warn(
+            "[mole/frontend] WebSocketFeedAdapter: initial market fetch failed —",
+            e,
+          );
+        });
+      if (this.opts.keeperLeaderLockPda) {
+        void connection
+          .getAccountInfo(this.opts.keeperLeaderLockPda, this.opts.commitment)
+          .then((info) => {
+            if (info) this.handleLeaderLockChange(info, onSnapshot);
+          })
+          .catch((e) => {
+            console.warn(
+              "[mole/frontend] WebSocketFeedAdapter: initial leader-lock fetch failed —",
+              e,
+            );
+          });
+      }
     }
     // Wave 17 — opt-in cluster-slot polling.
     if (this.opts.trackClusterSlot && typeof connection.getSlot === "function") {

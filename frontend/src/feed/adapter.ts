@@ -54,5 +54,18 @@ export function adapterKindFromUrl(): "mock" | "websocket" {
   if (requested === "live" || requested === "ws" || requested === "websocket") {
     return "websocket";
   }
+  if (requested === "mock") {
+    return "mock";
+  }
+  const env = (import.meta as unknown as { env?: Record<string, string | undefined> })
+    .env;
+  const defaultFeed = env?.VITE_DEFAULT_FEED?.trim().toLowerCase();
+  if (
+    defaultFeed === "live" ||
+    defaultFeed === "ws" ||
+    defaultFeed === "websocket"
+  ) {
+    return "websocket";
+  }
   return "mock";
 }

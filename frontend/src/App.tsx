@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { JSX } from "react";
 
+import { LandingPage } from "./landing/LandingPage";
+import { TradeView } from "./trade/TradeView";
 import { OverviewPanel } from "./panels/OverviewPanel";
 import { TraderPanel } from "./panels/TraderPanel";
 import { IndexerPanel } from "./panels/IndexerPanel";
@@ -33,6 +35,17 @@ import type { WalletAdapter, WalletStatus } from "./wallet";
 import { formatPubkey, formatSlot } from "./format";
 
 type PanelId = "overview" | "trader" | "indexer" | "keeper";
+
+/** Top-level screen: marketing landing → trading terminal → ops console. */
+type Screen = "landing" | "trade" | "console";
+
+function initialScreen(): Screen {
+  if (typeof window === "undefined") return "landing";
+  const v = new URLSearchParams(window.location.search).get("view");
+  if (v === "trade") return "trade";
+  if (v === "console") return "console";
+  return "landing";
+}
 
 const TABS: { id: PanelId; label: string; description: string }[] = [
   {
@@ -138,6 +151,7 @@ function buildAdapter(): AdapterBuild {
 }
 
 export function App(): JSX.Element {
+  const [screen, setScreen] = useState<Screen>(initialScreen);
   const [active, setActive] = useState<PanelId>("overview");
   const built = useMemo(() => buildAdapter(), []);
   const adapter = built.adapter;
@@ -218,6 +232,77 @@ export function App(): JSX.Element {
     };
   }, [wallet]);
 
+  const onWalletConnect = async () => {
+    try {
+      await wallet.connect();
+      setWalletStatus(wallet.status());
+      setWalletPubkey(wallet.pubkey());
+    } catch (e) {
+      console.warn("[mole/frontend] wallet connect failed", e);
+      setWalletStatus("error");
+    }
+  };
+
+  const onWalletDisconnect = async () => {
+    await wallet.disconnect();
+    setWalletStatus(wallet.status());
+    setWalletPubkey(wallet.pubkey());
+  };
+
+  const livePriceUsd =
+    feed && feed.indexer.market.midPriceMicro != null
+      ? Number(feed.indexer.market.midPriceMicro) / 1_000_000
+      : null;
+
+  // Marketing landing page — renders without a live feed so it loads
+  // instantly even while the RPC adapter is still booting.
+  if (screen === "landing") {
+    return (
+      <LandingPage
+        onLaunch={() => setScreen("trade")}
+        onConsole={() => setScreen("console")}
+        livePriceUsd={livePriceUsd}
+        liveSymbol={feed?.indexer.market.symbol ?? "SOL-PERP"}
+      />
+    );
+  }
+
+  // Hyperliquid-style trading terminal.
+  if (screen === "trade") {
+    if (!feed) {
+      return (
+        <div className="app">
+          <div className="empty-state">
+            <h2>正在连接行情…</h2>
+            <p>等待 RPC feed 启动（状态：{status}）。</p>
+            <button
+              type="button"
+              className="wallet-btn"
+              onClick={() => setScreen("landing")}
+            >
+              返回首页
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <TradeView
+        feed={feed}
+        wallet={wallet}
+        walletStatus={walletStatus}
+        {...(walletPubkey?.hex ? { walletPubkeyHex: walletPubkey.hex } : {})}
+        onConnect={() => void onWalletConnect()}
+        onDisconnect={() => void onWalletDisconnect()}
+        symbols={symbols}
+        activeSymbol={activeSymbol}
+        onSymbolChange={setActiveSymbol}
+        onHome={() => setScreen("landing")}
+        onConsole={() => setScreen("console")}
+      />
+    );
+  }
+
   if (!feed) {
     if (adapterKind === "websocket") {
       return (
@@ -269,28 +354,24 @@ export function App(): JSX.Element {
       break;
   }
 
-  const onWalletConnect = async () => {
-    try {
-      await wallet.connect();
-      setWalletStatus(wallet.status());
-      setWalletPubkey(wallet.pubkey());
-    } catch (e) {
-      console.warn("[mole/frontend] wallet connect failed", e);
-      setWalletStatus("error");
-    }
-  };
-
-  const onWalletDisconnect = async () => {
-    await wallet.disconnect();
-    setWalletStatus(wallet.status());
-    setWalletPubkey(wallet.pubkey());
-  };
-
   return (
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <span className="dot" /> MoleOption Console
+          <button
+            type="button"
+            className="brand-home"
+            onClick={() => setScreen("landing")}
+          >
+            <span className="dot" /> MoleOption Console
+          </button>
+          <button
+            type="button"
+            className="wallet-btn"
+            onClick={() => setScreen("trade")}
+          >
+            ↗ 交易终端
+          </button>
           <span className="badge">
             {adapterKind === "mock" ? "wave-12 mock" : "wave-12 live"} ·{" "}
             {status}

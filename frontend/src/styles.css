@@ -62,6 +62,19 @@ body {
   font-size: 16px;
 }
 
+.brand-home {
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 0;
+}
+
 .dot {
   width: 10px;
   height: 10px;

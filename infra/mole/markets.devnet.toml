@@ -1,0 +1,6 @@
+[[markets]]
+symbol = "SOL-PERP"
+program_id = "EWqyK5r4MyNaewo2s6nqLmZEVt4Xcx1yNT2dfFnTSfWp"
+market_pda = "GTAxg2pzhMAm9h5VtwfYqpojfBDUGvo5zsjzC8ZNxvCL"
+lock_pda = "5sP17DnbgMd8d9JmvbVSrKV6b2wF6f4CPdgYjdbNfDq6"
+expected_leader = "8eiak6rMfk2mbZZhn6ebBFdzzEMWSBAJd1ZVxaowJAz5"

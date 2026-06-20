@@ -1,0 +1,15 @@
+[Unit]
+Description=Mole devnet keeper
+After=network.target
+
+[Service]
+Type=simple
+User=admin
+WorkingDirectory=/var/www/molefinance/repo/frontend
+EnvironmentFile=-/etc/mole/mole-keeper-devnet.env
+ExecStart=/usr/bin/env node scripts/keeper-devnet.mjs run
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

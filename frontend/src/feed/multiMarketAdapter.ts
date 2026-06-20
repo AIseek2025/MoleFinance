@@ -287,6 +287,30 @@ export class MultiMarketFeedAdapter implements FeedAdapter {
       this.subIds.push(
         connection.onAccountChange(m.lockPda, onLock, this.opts.commitment),
       );
+      if (typeof connection.getAccountInfo === "function") {
+        void connection
+          .getAccountInfo(m.marketPda, this.opts.commitment)
+          .then((info) => {
+            if (info) this.handleMarketChange(m.symbol, info, onSnapshot);
+          })
+          .catch((e) => {
+            console.warn(
+              `[mole/frontend] MultiMarketFeedAdapter: initial market fetch failed for ${m.symbol} —`,
+              e,
+            );
+          });
+        void connection
+          .getAccountInfo(m.lockPda, this.opts.commitment)
+          .then((info) => {
+            if (info) this.handleLockChange(m.symbol, info, onSnapshot);
+          })
+          .catch((e) => {
+            console.warn(
+              `[mole/frontend] MultiMarketFeedAdapter: initial leader-lock fetch failed for ${m.symbol} —`,
+              e,
+            );
+          });
+      }
     }
 
     // Wave 19 — single shared program-account subscription to fan
